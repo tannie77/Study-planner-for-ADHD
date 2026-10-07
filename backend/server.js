@@ -14,6 +14,7 @@ const { sql } = require('./db');
 
 const app = express();
 app.disable('x-powered-by');
+if (process.env.RENDER) app.set('trust proxy', 1);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');

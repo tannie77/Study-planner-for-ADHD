@@ -3,6 +3,7 @@ services:
     name: studyvella
     runtime: node
     plan: starter
+    region: singapore
     buildCommand: cd backend && npm ci
     startCommand: node backend/server.js
     healthCheckPath: /api/health

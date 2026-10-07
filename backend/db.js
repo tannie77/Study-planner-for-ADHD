@@ -18,6 +18,7 @@ db.exec(`
     plan TEXT NOT NULL DEFAULT 'free',
     monthly_active INTEGER NOT NULL DEFAULT 0,
     upfront_expires_at TEXT,
+    weekly_goal_minutes INTEGER NOT NULL DEFAULT 300,
     razorpay_customer_id TEXT,
     razorpay_subscription_id TEXT,
     razorpay_cancel_requested_at TEXT,
@@ -62,6 +63,15 @@ db.exec(`
     created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS upfront_orders_user ON upfront_orders(user_id, expires_at);
+  CREATE TABLE IF NOT EXISTS exams (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    exam_date TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS exams_user_date ON exams(user_id, exam_date);
   CREATE TABLE IF NOT EXISTS study_sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -98,9 +108,12 @@ if (!userColumns.has('monthly_active')) {
   db.exec("UPDATE users SET monthly_active = 1 WHERE plan = 'pro' AND razorpay_subscription_id IS NOT NULL");
 }
 if (!userColumns.has('upfront_expires_at')) db.exec('ALTER TABLE users ADD COLUMN upfront_expires_at TEXT');
+if (!userColumns.has('weekly_goal_minutes')) db.exec('ALTER TABLE users ADD COLUMN weekly_goal_minutes INTEGER NOT NULL DEFAULT 300');
 
 const effectivePlan = user => user.monthly_active ||
   (user.upfront_expires_at && Date.parse(user.upfront_expires_at) > Date.now()) ? 'pro' : 'free';
+const effectiveTier = user => user.upfront_expires_at && Date.parse(user.upfront_expires_at) > Date.now()
+  ? 'pro-plus' : effectivePlan(user) === 'pro' ? 'pro' : 'free';
 
 const sql = {
   userByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
@@ -128,6 +141,13 @@ const sql = {
   pendingUpfrontOrder: db.prepare('SELECT * FROM upfront_orders WHERE user_id = ? AND paid_at IS NULL AND refunded_at IS NULL ORDER BY created_at DESC LIMIT 1'),
   insertUpfrontOrder: db.prepare('INSERT INTO upfront_orders (order_id, user_id, amount, currency, created_at) VALUES (?, ?, ?, ?, ?)'),
   latestUpfrontExpiry: db.prepare('SELECT MAX(expires_at) AS expires_at FROM upfront_orders WHERE user_id = ? AND paid_at IS NOT NULL AND refunded_at IS NULL'),
+  exams: db.prepare('SELECT * FROM exams WHERE user_id = ? ORDER BY exam_date ASC, created_at ASC'),
+  exam: db.prepare('SELECT * FROM exams WHERE id = ? AND user_id = ?'),
+  examCount: db.prepare('SELECT COUNT(*) AS count FROM exams WHERE user_id = ?'),
+  insertExam: db.prepare('INSERT INTO exams (id, user_id, title, subject, exam_date, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
+  updateExam: db.prepare('UPDATE exams SET title = ?, subject = ?, exam_date = ? WHERE id = ? AND user_id = ?'),
+  deleteExam: db.prepare('DELETE FROM exams WHERE id = ? AND user_id = ?'),
+  updateWeeklyGoal: db.prepare('UPDATE users SET weekly_goal_minutes = ? WHERE id = ?'),
   studySessions: db.prepare('SELECT id, subject, minutes, local_date AS localDate, created_at AS createdAt FROM study_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 500'),
   studySessionsRange: db.prepare('SELECT subject, minutes, local_date AS localDate FROM study_sessions WHERE user_id = ? AND local_date BETWEEN ? AND ?'),
   insertStudySession: db.prepare('INSERT INTO study_sessions (id, user_id, subject, minutes, local_date, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
@@ -151,4 +171,4 @@ const publicTomorrowTest = test => ({
   lastReviewedAt: test.last_reviewed_at, createdAt: test.created_at, resolvedAt: test.resolved_at,
 });
 
-module.exports = { db, sql, effectivePlan, publicTask, publicTomorrowTest };
+module.exports = { db, sql, effectivePlan, effectiveTier, publicTask, publicTomorrowTest };

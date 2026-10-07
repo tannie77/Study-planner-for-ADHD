@@ -28,7 +28,7 @@ Run the API tests with `npm test` from `todo-app/backend`.
 | --- | --- |
 | Free | 60 active tasks, unlimited subjects, due dates, priority, focus timer, study log, Tomorrow Test |
 | Pro monthly — ₹299/month | Unlimited active tasks, weekly study insights, and CSV task export, plus everything in Free; renews monthly until cancelled |
-| Pro upfront — ₹2,999 once | The same Pro features for 15 months from payment; no automatic renewal or additional payment during that term |
+| Pro Plus upfront — ₹2,999 once | Everything in Pro, plus an exam countdown with subject task progress and an editable weekly study goal, for 15 months from payment; no automatic renewal or additional payment during that term |
 
 Completed tasks do not count toward the Free active-task limit. The upfront pass saves ₹1,486 against 15 monthly payments (₹4,485). The app verifies that the Razorpay subscription plan is exactly ₹299 monthly in INR before enabling either checkout. Profitability depends on acquisition, retention, pricing, and costs.
 
@@ -51,7 +51,7 @@ REFUND_POLICY=7-day-first-charge
 
 Paid checkout also requires the public Contact, About, Privacy, Terms, and Refunds pages to be complete, and password recovery email to be configured. Set the real business name, a working support inbox, and a reviewed monthly refund choice (`7-day-first-charge` or `no-refunds`). The upfront pass policy is no refunds after purchase, subject to required legal exceptions and billing errors. Optional `SUPPORT_PHONE` and `BUSINESS_ADDRESS` appear on the Contact page when supplied. When those required details are missing, paid checkout remains disabled. Review these policy drafts for your business before inviting paying customers.
 
-The site enables upgrades only after it retrieves and validates the configured monthly plan. Students authorise payments in Razorpay Checkout. Monthly access follows live subscription status and signed webhooks. The 15-month pass creates a one-time Razorpay Order for ₹2,999 (299900 paise); after verifying the checkout signature, captured payment, order status, amount, currency, and owner, the app grants access through the exact expiry date. A signed payment webhook can also grant access if the browser callback is missed. Full refunds revoke the pass. The pass has no automatic renewal. Students can schedule cancellation of monthly billing at the end of the current billing period. Razorpay requires a bounded subscription; this integration creates 120 monthly billing cycles (ten years). Before then, a customer who wants to continue would need a new subscription.
+The site enables upgrades only after it retrieves and validates the configured monthly plan. Students authorise payments in Razorpay Checkout. Monthly access follows live subscription status and signed webhooks. The Pro Plus 15-month pass creates a one-time Razorpay Order for ₹2,999 (299900 paise); after verifying the checkout signature, captured payment, order status, amount, currency, and owner, the app grants access through the exact expiry date. A signed payment webhook can also grant access if the browser callback is missed. Full refunds revoke the pass. The pass has no automatic renewal. Exam Runway and the weekly goal API require an active Pro Plus pass; saved exam and goal data remain on the account if the pass expires. Students can schedule cancellation of monthly billing at the end of the current billing period. Razorpay requires a bounded subscription; this integration creates 120 monthly billing cycles (ten years). Before then, a customer who wants to continue would need a new subscription.
 
 Run `npm run billing:check` from `todo-app/backend` after setting the variables. It verifies the Razorpay plan and prints the webhook URL. Then test monthly checkout, a successful charge, a failed charge, cancellation, one-time checkout, expiry, and refund handling with test keys and a public test webhook URL. Replace test keys, plan ID, and webhook secret with their live equivalents only after the test flow works. When variables are absent, paid checkout stays disabled. Keep the Key Secret and webhook secret out of frontend files and Git.
 
@@ -78,6 +78,7 @@ The login screen has a “Forgot password?” flow. It emails a one-hour, single
 - `backend/tasks.js` — private task CRUD and plan limits
 - `backend/study.js` — focus-session log
 - `backend/tomorrow-tests.js` — private question capture and next-day review
+- `backend/runway.js` — Pro Plus exam countdowns and weekly study goals
 - `backend/billing.js` — Razorpay subscriptions, one-time orders, checkout verification, cancellation, signed webhooks
 - `backend/db.js` — SQLite tables and queries
 - `frontend/` — responsive website

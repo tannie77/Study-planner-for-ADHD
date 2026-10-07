@@ -10,6 +10,7 @@ const { router: billing, configured: billingConfigured, PRO_LABEL, UPFRONT_LABEL
 const { router: legal, legalReady } = require('./legal');
 const study = require('./study');
 const tomorrowTests = require('./tomorrow-tests');
+const runway = require('./runway');
 const { sql } = require('./db');
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/auth', auth);
 app.use('/api/tasks', tasks);
 app.use('/api/study', study);
 app.use('/api/tomorrow-tests', tomorrowTests);
+app.use('/api/runway', runway);
 app.use(legal);
 
 app.get('/api/export/tasks.csv', requireAuth, (req, res) => {

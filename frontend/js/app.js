@@ -1,6 +1,6 @@
 const $ = selector => document.querySelector(selector);
 const state = {
-  user: null, config: null, tasks: [], sessions: [], tests: [], insights: null, view: 'today',
+  user: null, config: null, tasks: [], sessions: [], tests: [], insights: null, runway: null, view: 'today',
   subject: null, status: 'open', search: '', authMode: 'register', requestedPlan: null,
   timerMinutes: 25, remaining: 25 * 60, timerEnd: null, timerInterval: null,
 };
@@ -151,12 +151,13 @@ function renderHeader() {
     all: ['The whole agenda.', 'Every task, one clear view.'],
     completed: ['Done. And then some.', 'See the work you’ve already handled.'],
     insights: ['Your work, in numbers.', 'See where your focus went this week.'],
+    runway: ['The exam runway.', 'Your deadlines, your focus, and the progress in between.'],
     tomorrow: ['Make the work stick.', 'Answer from memory. Keep what needs another look.'],
   })[state.view];
   $('#view-title').textContent = copy[0];
   $('#view-description').textContent = copy[1];
-  $('#task-list-title').firstChild.textContent = state.subject ? `${state.subject} tasks ` : ({ today: 'Today’s tasks ', upcoming: 'Upcoming tasks ', all: 'All tasks ', completed: 'Completed tasks ', insights: 'All tasks ', tomorrow: 'All tasks ' })[state.view];
-  $('#new-task-button').hidden = state.view === 'tomorrow' && !state.subject;
+  $('#task-list-title').firstChild.textContent = state.subject ? `${state.subject} tasks ` : ({ today: 'Today’s tasks ', upcoming: 'Upcoming tasks ', all: 'All tasks ', completed: 'Completed tasks ', insights: 'All tasks ', tomorrow: 'All tasks ', runway: 'All tasks ' })[state.view];
+  $('#new-task-button').hidden = ['tomorrow', 'runway'].includes(state.view) && !state.subject;
   document.querySelectorAll('.side-link').forEach(button => button.classList.toggle('active', !state.subject && button.dataset.view === state.view));
 }
 
@@ -168,16 +169,22 @@ function renderStats() {
   $('#done-count').textContent = doneToday;
   $('#focus-count').textContent = `${focused} min`;
   $('#upcoming-count').textContent = upcoming;
-  $('#profile-plan').textContent = state.user.plan === 'pro' ? 'Pro plan' : 'Free plan';
+  $('#profile-plan').textContent = state.user.tier === 'pro-plus' ? 'Pro Plus plan' : state.user.plan === 'pro' ? 'Pro plan' : 'Free plan';
+  const upgrade = $('#sidebar-upgrade');
+  upgrade.querySelector('span').textContent = state.user.tier === 'pro-plus' ? '✦ STUDYVELLA PRO PLUS' : '✦ STUDYVELLA PRO';
+  upgrade.querySelector('strong').textContent = state.user.tier === 'pro-plus' ? 'Your runway is ready.' : state.user.plan === 'pro' ? 'Your work, well run.' : 'More room for your next move.';
+  upgrade.querySelector('small').textContent = state.user.plan === 'pro' ? 'See your plan ↗' : 'See what’s included ↗';
 }
 
 function render() {
   if (!state.user) return;
   renderSubjects(); renderHeader(); renderStats(); renderTasks(); renderTomorrow();
-  $('#task-panel').hidden = ['insights', 'tomorrow'].includes(state.view) && !state.subject;
+  $('#task-panel').hidden = ['insights', 'tomorrow', 'runway'].includes(state.view) && !state.subject;
   $('#insights-panel').hidden = state.view !== 'insights' || Boolean(state.subject);
   $('#tomorrow-panel').hidden = state.view !== 'tomorrow' || Boolean(state.subject);
+  $('#runway-panel').hidden = state.view !== 'runway' || Boolean(state.subject);
   if (state.view === 'insights') renderInsights();
+  if (state.view === 'runway') renderRunway();
   $('#status-filter').value = state.status;
 }
 
@@ -212,9 +219,97 @@ function renderInsights() {
     : '<p class="insight-empty">Finish a focus session to see your subjects here.</p>';
 }
 
+function renderRunway() {
+  if (!state.runway) {
+    $('#runway-list').innerHTML = '<p class="insight-empty">Loading your exam runway…</p>';
+    $('#goal-progress').textContent = 'Loading…';
+    $('#goal-copy').textContent = '';
+    $('#goal-bar').value = 0;
+    return;
+  }
+  const { exams, goal } = state.runway;
+  $('#goal-progress').textContent = `${goal.minutesDone} / ${goal.minutesTarget} min`;
+  $('#goal-copy').textContent = goal.minutesDone >= goal.minutesTarget
+    ? 'Weekly goal reached. Keep the momentum on your terms.'
+    : `${Math.max(0, goal.minutesTarget - goal.minutesDone)} min to go this week. Every focus session counts.`;
+  $('#goal-bar').max = goal.minutesTarget;
+  $('#goal-bar').value = Math.min(goal.minutesDone, goal.minutesTarget);
+  $('#goal-form').elements.minutes.value = goal.minutesTarget;
+  const today = localDate();
+  $('#runway-list').innerHTML = exams.length ? exams.map(exam => {
+    const days = Math.round((Date.parse(`${exam.examDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+    const countdown = days === 0 ? 'Exam day' : days > 0 ? `${days} ${days === 1 ? 'day' : 'days'} left` : `${Math.abs(days)} ${Math.abs(days) === 1 ? 'day' : 'days'} ago`;
+    const tasks = state.tasks.filter(task => task.project.toLowerCase() === exam.subject.toLowerCase() && (!task.dueDate || task.dueDate <= exam.examDate));
+    const finished = tasks.filter(task => task.completed).length;
+    const progress = tasks.length ? `<p>${finished} of ${tasks.length} subject tasks done by exam day</p><progress max="${tasks.length}" value="${finished}"></progress>` : '<p>Add tasks for this subject to see your preparation move forward.</p>';
+    return `<article class="exam-card"><div class="exam-card-top"><span class="meta-subject">${escapeHtml(exam.subject)}</span><span class="exam-countdown">${escapeHtml(countdown)}</span></div><h3>${escapeHtml(exam.title)}</h3><p>${escapeHtml(new Date(`${exam.examDate}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }))}</p>${progress}<div class="exam-card-actions"><button class="quiet-button" data-exam-action="edit" data-id="${exam.id}">Edit</button><button class="quiet-button" data-exam-action="delete" data-id="${exam.id}">Delete</button></div></article>`;
+  }).join('') : '<div class="empty-state"><span class="empty-icon">✧</span><strong>Give exam day a clear place in your plan.</strong><p>Add an exam to see its countdown and the work you have already finished.</p><button class="button button-outline" id="empty-add-exam">+ Add an exam</button></div>';
+}
+
+function openExam(exam = null) {
+  const dialog = $('#exam-dialog');
+  const form = $('#exam-form');
+  form.reset();
+  dialog.dataset.id = exam?.id || '';
+  $('#exam-dialog-title').textContent = exam ? 'Edit exam' : 'Add an exam';
+  $('#exam-save').textContent = exam ? 'Save changes' : 'Save exam';
+  form.elements.title.value = exam?.title || '';
+  form.elements.subject.value = exam?.subject || 'General';
+  form.elements.examDate.value = exam?.examDate || '';
+  dialog.showModal();
+  form.elements.title.focus();
+}
+
+async function saveExam(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $('#exam-save');
+  const id = $('#exam-dialog').dataset.id;
+  button.disabled = true;
+  try {
+    const body = { title: form.elements.title.value, subject: form.elements.subject.value, examDate: form.elements.examDate.value };
+    const result = await api(id ? `/runway/exams/${id}` : '/runway/exams', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(body) });
+    if (id) state.runway.exams = state.runway.exams.map(exam => exam.id === id ? result.exam : exam);
+    else state.runway.exams.push(result.exam);
+    state.runway.exams.sort((a, b) => a.examDate.localeCompare(b.examDate));
+    $('#exam-dialog').close();
+    renderRunway();
+    toast(id ? 'Exam updated.' : 'Exam added to your runway.');
+  } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+}
+
+async function handleExamAction(button) {
+  const exam = state.runway?.exams.find(item => item.id === button.dataset.id);
+  if (!exam) return;
+  if (button.dataset.examAction === 'edit') return openExam(exam);
+  try {
+    await api(`/runway/exams/${exam.id}`, { method: 'DELETE' });
+    state.runway.exams = state.runway.exams.filter(item => item.id !== exam.id);
+    renderRunway();
+    toast('Exam removed.');
+  } catch (error) { toast(error.message, true); }
+}
+
+async function saveGoal(event) {
+  event.preventDefault();
+  const button = $('#goal-form button');
+  button.disabled = true;
+  try {
+    const minutes = Number($('#goal-form').elements.minutes.value);
+    const result = await api('/runway/goal', { method: 'PUT', body: JSON.stringify({ minutes }) });
+    state.runway.goal.minutesTarget = result.minutesTarget;
+    renderRunway();
+    toast('Weekly focus goal saved.');
+  } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+}
+
 async function selectView(view) {
   if (view === 'insights' && state.user.plan !== 'pro') return openPlan();
+  if (view === 'runway' && state.user.tier !== 'pro-plus') return openPlan();
   if (view === 'insights') state.insights = null;
+  if (view === 'runway') state.runway = null;
   state.view = view;
   state.subject = null;
   state.status = view === 'completed' ? 'done' : 'open';
@@ -224,6 +319,12 @@ async function selectView(view) {
     try {
       state.insights = (await api(`/study/insights?today=${localDate()}`));
       renderInsights();
+    } catch (error) { toast(error.message, true); }
+  }
+  if (view === 'runway') {
+    try {
+      state.runway = await api(`/runway?today=${localDate()}`);
+      renderRunway();
     } catch (error) { toast(error.message, true); }
   }
 }
@@ -364,15 +465,15 @@ function openPlan() {
   const upfrontActive = state.user.upfrontExpiresAt && Date.parse(state.user.upfrontExpiresAt) > Date.now();
   const enabled = state.user.hasBilling && (state.config?.billingEnabled || state.user.hasSubscription);
   const expiryText = upfrontActive ? new Date(state.user.upfrontExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-  $('#current-plan-copy').textContent = upfrontActive ? `Your 15-month Pro pass is active until ${expiryText}. No further payment is scheduled for this pass.` : pro ? 'You’re on Pro. Keep planning without limits.' : `You’re on Free. You can keep up to ${state.user.freeTaskLimit} active tasks.`;
-  $('#plan-price').textContent = `${state.config?.proPriceLabel || '₹299 / month'} or ${state.config?.upfrontPriceLabel || '₹2,999 once / 15 months'}`;
-  $('#plan-action').textContent = pro || state.user.hasSubscription ? 'Check monthly billing status' : 'Choose ₹299 monthly';
+  $('#current-plan-copy').textContent = upfrontActive ? `You’re on Pro Plus until ${expiryText}. No further payment is scheduled for this pass.` : pro ? 'You’re on Pro. Keep planning without limits.' : `You’re on Free. You can keep up to ${state.user.freeTaskLimit} active tasks.`;
+  $('#plan-action').textContent = pro || state.user.hasSubscription ? 'Check monthly billing' : 'Choose Pro';
+  $('#plan-action').hidden = Boolean(upfrontActive && !state.user.hasSubscription);
   $('#plan-action').disabled = !enabled || Boolean(upfrontActive && !state.user.hasSubscription);
-  $('#plan-upfront').hidden = Boolean(pro);
-  $('#plan-upfront').disabled = !state.config?.billingEnabled;
+  $('#plan-upfront').hidden = Boolean(upfrontActive);
+  $('#plan-upfront').disabled = !state.config?.billingEnabled || Boolean(pro);
   $('#plan-cancel').hidden = !pro || !enabled || !state.user.hasSubscription;
   $('#export-button').hidden = !pro;
-  $('#plan-footnote').textContent = enabled ? 'Payments are handled by Razorpay. The 15-month pass is a single charge and does not renew.' : 'The site owner needs to configure payments before upgrades are available.';
+  $('#plan-footnote').textContent = enabled ? 'Razorpay handles payments. Pro Plus is one payment for 15 months and does not renew.' : 'The site owner needs to configure payments before upgrades are available.';
   $('#plan-dialog').showModal();
   if (enabled && state.user.hasSubscription) {
     api('/billing/status').then(status => {
@@ -381,8 +482,8 @@ function openPlan() {
       $('#plan-cancel').hidden = status.status !== 'active' || status.plan !== 'pro' || status.cancelScheduled;
       $('#plan-upfront').disabled = !state.config?.billingEnabled || !['none', 'created', 'cancelled', 'completed', 'expired'].includes(status.status) || status.plan === 'pro';
       if (status.plan !== 'pro') {
-        $('#plan-action').textContent = status.status === 'created' ? 'Continue ₹299 monthly checkout'
-          : ['cancelled', 'completed', 'expired'].includes(status.status) ? 'Choose ₹299 monthly' : 'Check monthly billing status';
+        $('#plan-action').textContent = status.status === 'created' ? 'Continue Pro checkout'
+          : ['cancelled', 'completed', 'expired'].includes(status.status) ? 'Choose Pro' : 'Check monthly billing';
       }
       if (status.plan !== state.user.plan) refreshUser().catch(() => {});
     }).catch(() => {});
@@ -390,9 +491,9 @@ function openPlan() {
 }
 
 function billingStatusCopy(status) {
-  if (status.upfrontExpiresAt && Date.parse(status.upfrontExpiresAt) > Date.now()) return `Your one-time Pro pass is active until ${new Date(status.upfrontExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}. No renewal is scheduled for this pass.`;
+  if (status.upfrontExpiresAt && Date.parse(status.upfrontExpiresAt) > Date.now()) return `Your Pro Plus pass is active until ${new Date(status.upfrontExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}. No renewal is scheduled.`;
   if (status.cancelScheduled) return 'Cancellation is scheduled. Pro stays active until the current billing period ends.';
-  if (status.status === 'active' && status.plan === 'pro') return 'Your ₹299 monthly subscription is active.';
+  if (status.status === 'active' && status.plan === 'pro') return 'Your ₹299 monthly subscription is active. To choose Pro Plus, cancel monthly billing and wait until this paid period ends.';
   if (status.status === 'active') return 'Your first payment is still being confirmed.';
   if (status.status === 'pending' || status.status === 'halted') return 'A payment needs attention. Check the message from Razorpay to update your payment method.';
   if (status.status === 'authenticated') return 'Your subscription is being activated. Please check again shortly.';
@@ -478,14 +579,14 @@ async function upfrontAction() {
     const checkout = new window.Razorpay({
       key, order_id: orderId, amount, currency,
       name: 'Studyvella',
-      description: 'Studyvella Pro — one payment for 15 months',
+      description: 'Studyvella Pro Plus — one payment for 15 months',
       prefill: { name: state.user.name, email: state.user.email },
       theme: { color: '#9A728A' },
       handler: async response => {
         try {
           const result = await api('/billing/upfront/verify', { method: 'POST', body: JSON.stringify(response) });
           await refreshUser();
-          toast(result.plan === 'pro' ? 'Your 15-month Pro pass is active.' : 'Payment received. Your Pro pass will activate shortly.');
+          toast(result.plan === 'pro' ? 'Your 15-month Pro Plus pass is active.' : 'Payment received. Your Pro Plus pass will activate shortly.');
           if (result.pending) {
             let activated = false;
             for (let attempt = 1; attempt <= 4; attempt++) {
@@ -493,7 +594,7 @@ async function upfrontAction() {
                 if (activated) return;
                 try {
                   const update = await api('/billing/upfront/verify', { method: 'POST', body: JSON.stringify(response) });
-                  if (update.plan === 'pro' && !activated) { activated = true; await refreshUser(); toast('Your 15-month Pro pass is active.'); }
+                  if (update.plan === 'pro' && !activated) { activated = true; await refreshUser(); toast('Your 15-month Pro Plus pass is active.'); }
                 } catch { /* the signed webhook can finish activation later */ }
               }, attempt * 2500);
             }
@@ -547,6 +648,10 @@ async function tickTimer() {
       try { state.insights = await api(`/study/insights?today=${localDate()}`); renderInsights(); }
       catch { /* insights will refresh when reopened */ }
     }
+    if (state.view === 'runway' && state.user.tier === 'pro-plus') {
+      try { state.runway = await api(`/runway?today=${localDate()}`); renderRunway(); }
+      catch { /* runway will refresh when reopened */ }
+    }
   } catch (error) { toast(`Timer finished, but the session could not be saved: ${error.message}`, true); }
   state.remaining = state.timerMinutes * 60;
   showTimer();
@@ -595,12 +700,15 @@ document.addEventListener('click', event => {
   }
   const taskAction = event.target.closest('[data-action]');
   if (taskAction) return handleTaskAction(taskAction);
+  const examAction = event.target.closest('[data-exam-action]');
+  if (examAction) return handleExamAction(examAction);
   const testAction = event.target.closest('[data-test-action]');
   if (testAction) return handleTestAction(testAction);
   const reviewOutcome = event.target.closest('[data-outcome]');
   if (reviewOutcome) return reviewTest(reviewOutcome.dataset.outcome);
   if (event.target.closest('#empty-add-task')) openTask();
   if (event.target.closest('#empty-add-test')) openTest();
+  if (event.target.closest('#empty-add-exam')) openExam();
 });
 
 $('#back-home').addEventListener('click', () => { history.replaceState(null, '', '/'); showScreen('landing'); });
@@ -631,7 +739,7 @@ $('#auth-form').addEventListener('submit', async event => {
 });
 $('#logout-button').addEventListener('click', async () => {
   try { await api('/auth/logout', { method: 'POST' }); } catch { /* clear local UI regardless */ }
-  state.user = null; state.tasks = []; state.sessions = []; state.tests = []; state.insights = null;
+  state.user = null; state.tasks = []; state.sessions = []; state.tests = []; state.insights = null; state.runway = null;
   state.view = 'today'; state.subject = null; state.status = 'open';
   resetTimer();
   showScreen('landing');
@@ -641,6 +749,9 @@ $('#add-subject').addEventListener('click', () => { openTask(null, ''); $('#task
 $('#task-form').addEventListener('submit', saveTask);
 $('#test-form').addEventListener('submit', saveTest);
 $('#new-test-button').addEventListener('click', () => openTest());
+$('#new-exam-button').addEventListener('click', () => openExam());
+$('#exam-form').addEventListener('submit', saveExam);
+$('#goal-form').addEventListener('submit', saveGoal);
 $('#review-reveal').addEventListener('click', () => {
   if (!$('#review-answer').value.trim()) return toast('Write your answer from memory first.', true);
   $('#review-reveal-row').hidden = true;

@@ -257,6 +257,8 @@ test('Razorpay checkout, payment verification, webhooks, and cancellation', asyn
   assert.equal((await webhookEvent('evt_billing_active', 'subscription.charged', firstId)).status, 200);
   assert.equal((await webhookEvent('evt_billing_active', 'subscription.charged', firstId)).status, 200);
   assert.equal((await request('/api/auth/me', { cookie })).data.user.plan, 'pro');
+  assert.equal((await request('/api/auth/me', { cookie })).data.user.tier, 'pro');
+  assert.equal((await request('/api/runway?today=2026-10-07', { cookie })).status, 403);
   assert.equal((await request('/api/billing/checkout', { method: 'POST', cookie })).status, 409);
   assert.equal((await request('/api/billing/status', { cookie })).data.status, 'active');
 
@@ -324,6 +326,23 @@ test('15-month upfront pass is one charge, expires, and ends after a full refund
   const verified = await request('/api/billing/upfront/verify', { method: 'POST', cookie: buyer.cookie, body });
   assert.equal(verified.status, 200);
   assert.equal(verified.data.plan, 'pro');
+  assert.equal((await request('/api/auth/me', { cookie: buyer.cookie })).data.user.tier, 'pro-plus');
+  const emptyRunway = await request('/api/runway?today=2026-10-07', { cookie: buyer.cookie });
+  assert.equal(emptyRunway.status, 200);
+  assert.equal(emptyRunway.data.goal.minutesTarget, 300);
+  assert.equal(emptyRunway.data.goal.minutesDone, 0);
+  assert.equal((await request('/api/runway?today=2026-02-30', { cookie: buyer.cookie })).status, 400);
+  assert.equal((await request('/api/runway/goal', { method: 'PUT', cookie: buyer.cookie, body: { minutes: 20 } })).status, 400);
+  assert.equal((await request('/api/runway/goal', { method: 'PUT', cookie: buyer.cookie, body: { minutes: 180 } })).data.minutesTarget, 180);
+  assert.equal((await request('/api/study/sessions', { method: 'POST', cookie: buyer.cookie, body: { subject: 'Biology', minutes: 50, localDate: '2026-10-07' } })).status, 201);
+  assert.equal((await request('/api/runway?today=2026-10-07', { cookie: buyer.cookie })).data.goal.minutesDone, 50);
+  assert.equal((await request('/api/runway/exams', { method: 'POST', cookie: buyer.cookie, body: { title: 'Invalid', subject: 'Biology', examDate: '2026-02-30' } })).status, 400);
+  const examResult = await request('/api/runway/exams', { method: 'POST', cookie: buyer.cookie, body: { title: 'Biology final', subject: 'Biology', examDate: '2026-10-20' } });
+  assert.equal(examResult.status, 201);
+  const examId = examResult.data.exam.id;
+  assert.equal((await request('/api/runway?today=2026-10-07', { cookie: buyer.cookie })).data.exams[0].title, 'Biology final');
+  assert.equal((await request(`/api/runway/exams/${examId}`, { method: 'PATCH', cookie: other.cookie, body: { title: 'Changed', subject: 'Biology', examDate: '2026-10-20' } })).status, 403);
+  assert.equal((await request(`/api/runway/exams/${examId}`, { method: 'PATCH', cookie: buyer.cookie, body: { title: 'Biology paper', subject: 'Biology', examDate: '2026-10-21' } })).data.exam.title, 'Biology paper');
   const expiresAt = verified.data.expiresAt;
   assert.ok(Date.parse(expiresAt) > Date.now() + 14 * 30 * 24 * 60 * 60 * 1000);
   assert.equal((await request('/api/billing/upfront/verify', { method: 'POST', cookie: buyer.cookie, body })).data.expiresAt, expiresAt);
@@ -336,6 +355,7 @@ test('15-month upfront pass is one charge, expires, and ends after a full refund
   payments.set(paymentId, { ...payments.get(paymentId), amount_refunded: 299900, status: 'refunded' });
   assert.equal((await paymentWebhookEvent('evt_full_refund', 'refund.processed', paymentId)).status, 200);
   assert.equal((await request('/api/auth/me', { cookie: buyer.cookie })).data.user.plan, 'free');
+  assert.equal((await request('/api/runway?today=2026-10-07', { cookie: buyer.cookie })).status, 403);
   const secondCheckout = await request('/api/billing/upfront/checkout', { method: 'POST', cookie: other.cookie });
   const secondOrderId = secondCheckout.data.orderId;
   const secondPaymentId = 'pay_UpfrontTest2';
@@ -343,12 +363,15 @@ test('15-month upfront pass is one charge, expires, and ends after a full refund
   payments.set(secondPaymentId, { id: secondPaymentId, order_id: secondOrderId, amount: 299900, currency: 'INR', status: 'captured', amount_refunded: 0, created_at: Math.floor(Date.now() / 1000) });
   assert.equal((await paymentWebhookEvent('evt_upfront_capture', 'payment.captured', secondPaymentId)).status, 200);
   assert.equal((await request('/api/auth/me', { cookie: other.cookie })).data.user.plan, 'pro');
+  assert.equal((await request('/api/runway?today=2026-10-07', { cookie: other.cookie })).data.exams.length, 0);
+  assert.equal((await request(`/api/runway/exams/${examId}`, { method: 'PATCH', cookie: other.cookie, body: { title: 'Changed', subject: 'Biology', examDate: '2026-10-20' } })).status, 404);
   const beforeOrderEvent = (await request('/api/auth/me', { cookie: other.cookie })).data.user.upfrontExpiresAt;
   assert.equal((await paymentWebhookEvent('evt_upfront_order_paid', 'order.paid', secondPaymentId)).status, 200);
   assert.equal((await request('/api/auth/me', { cookie: other.cookie })).data.user.upfrontExpiresAt, beforeOrderEvent);
   db.prepare('UPDATE users SET upfront_expires_at = ? WHERE id = ?').run('2020-01-01T00:00:00.000Z', other.data.user.id);
   assert.equal((await request('/api/auth/me', { cookie: other.cookie })).data.user.plan, 'free');
   assert.equal((await request('/api/export/tasks.csv', { cookie: other.cookie })).status, 403);
+  assert.equal((await request('/api/runway?today=2026-10-07', { cookie: other.cookie })).status, 403);
 });
 
 test('free plan permits 60 active tasks, then reopens space when one is completed', async () => {

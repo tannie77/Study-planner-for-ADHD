@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const { promisify } = require('node:util');
 const express = require('express');
-const { db, sql, effectivePlan } = require('./db');
+const { db, sql, effectivePlan, effectiveTier } = require('./db');
 
 const router = express.Router();
 const scrypt = promisify(crypto.scrypt);
@@ -13,7 +13,7 @@ const attempts = new Map();
 
 const hashToken = token => crypto.createHash('sha256').update(token).digest('hex');
 const publicUser = user => ({
-  id: user.id, name: user.name, email: user.email, plan: effectivePlan(user),
+  id: user.id, name: user.name, email: user.email, plan: effectivePlan(user), tier: effectiveTier(user),
   freeTaskLimit: FREE_TASK_LIMIT,
   hasBilling: require('./billing').configured(),
   hasSubscription: Boolean(user.razorpay_subscription_id),
@@ -42,6 +42,7 @@ function requireAuth(req, res, next) {
   const plan = effectivePlan(user);
   if (user.plan !== plan) db.prepare('UPDATE users SET plan = ? WHERE id = ?').run(plan, user.id);
   user.plan = plan;
+  user.tier = effectiveTier(user);
   req.user = user;
   next();
 }

@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: studyvella
+    runtime: node
+    plan: starter
+    buildCommand: cd backend && npm ci
+    startCommand: node backend/server.js
+    healthCheckPath: /api/health
+    disk:
+      name: studyvella-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/studyvella.sqlite
+      - key: BUSINESS_NAME
+        value: Studyvella
+      - key: REFUND_POLICY
+        value: 7-day-first-charge

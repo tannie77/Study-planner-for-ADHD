@@ -1,0 +1,17 @@
+{
+  "name": "studyvella",
+  "version": "0.1.0",
+  "description": "Student study planner SaaS MVP",
+  "main": "server.js",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "billing:check": "node check-billing.js",
+    "test": "node test/api.test.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

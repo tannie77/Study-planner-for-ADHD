@@ -1,0 +1,4 @@
+backend/.env
+backend/data/
+backend/node_modules/
+*.log

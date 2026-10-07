@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171217">
+  <meta name="description" content="Studyvella is a clear space for ambitious students to plan every deadline, protect their focus, and get it done without the noise.">
+  <title>Studyvella — a lot to do, a clear way through</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/brand.css">
+  <script src="/js/app.js" defer></script>
+</head>
+<body>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <div id="landing-view" hidden>
+    <header class="site-header shell">
+      <a class="brand" href="/" aria-label="Studyvella home"><span class="brand-mark">S</span> Studyvella<span class="brand-dot">.</span></a>
+      <nav class="landing-nav" aria-label="Main navigation">
+        <a href="#features">Features</a><a href="#pricing">Pricing</a>
+        <button class="text-button" data-auth="login">Log in</button>
+        <button class="button button-dark button-small" data-auth="register">Get started</button>
+      </nav>
+    </header>
+    <main>
+      <div class="affirmation-banner" id="affirmation-banner" role="region" aria-label="Work and study affirmations" tabindex="0">
+        <div class="affirmation-track">
+          <div class="affirmation-set">
+            <span class="affirmation-item">I can handle a full agenda with a clear mind.</span>
+            <span class="affirmation-item">I work with purpose and calm.</span>
+            <span class="affirmation-item">One focused step moves me forward.</span>
+            <span class="affirmation-item">I finish the work in front of me.</span>
+            <span class="affirmation-item">My ambition has a plan.</span>
+          </div>
+          <div class="affirmation-set" aria-hidden="true">
+            <span class="affirmation-item">I can handle a full agenda with a clear mind.</span>
+            <span class="affirmation-item">I work with purpose and calm.</span>
+            <span class="affirmation-item">One focused step moves me forward.</span>
+            <span class="affirmation-item">I finish the work in front of me.</span>
+            <span class="affirmation-item">My ambition has a plan.</span>
+          </div>
+        </div>
+      </div>
+      <section class="hero shell">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="eyebrow-line"></span> THE STUDENT WHO GETS IT DONE</p>
+          <h1>A lot to do.<br><em>A clear way through.</em></h1>
+          <p class="hero-lead">For the student with a full schedule and a clear head. Plan every deadline, protect your focus, and keep moving without the noise.</p>
+          <div class="hero-actions"><button class="button button-dark button-large" data-auth="register">Make your plan <span aria-hidden="true">↗</span></button><span>Free to start. No credit card.</span></div>
+          <div class="hero-proof"><span class="proof-symbol">✳</span><p>A hundred things to tackle.<br><strong>One calm place to run it all.</strong></p></div>
+        </div>
+        <div class="hero-art" aria-label="Preview of the Studyvella study planner">
+          <div class="art-glow"></div>
+          <div class="preview-card">
+            <div class="preview-top"><span class="preview-logo">S</span><span>THE DAILY EDIT</span><span class="preview-dots">01 / 03</span></div>
+            <h2>Monday, handled<span>.</span></h2>
+            <p>The work is big. The next move is clear.</p>
+            <div class="preview-progress"><div><span>Today’s progress</span><strong>2 of 4 done</strong></div><div class="progress-track"><span></span></div></div>
+            <div class="preview-task done"><span class="preview-check">✓</span><div><strong>Review lecture notes</strong><small>Biology · Done</small></div></div>
+            <div class="preview-task"><span class="preview-check"></span><div><strong>Finish problem set</strong><small>Mathematics · Today</small></div><span class="preview-priority">PRIORITY</span></div>
+            <div class="preview-task"><span class="preview-check"></span><div><strong>Read chapter 6</strong><small>History · Tomorrow</small></div></div>
+            <div class="preview-bottom"><span>◷</span><div><strong>Next: a focus block</strong><small>One move at a time.</small></div><span>25 min →</span></div>
+          </div>
+          <div class="floating-note"><span>✳</span><div><strong>Fully booked. Fully in control.</strong><small>Your plans, without the noise.</small></div></div>
+        </div>
+      </section>
+      <section id="features" class="features-section">
+        <div class="shell">
+          <p class="eyebrow">YOUR WORK, WELL RUN</p>
+          <h2>Ambition, with<br><em>room to breathe.</em></h2>
+          <div class="feature-grid">
+            <article class="feature-card"><span class="feature-icon orange">▣</span><h3>Run the whole agenda</h3><p>Every assignment, exam, and small next step in one place. See what matters now and what comes next.</p></article>
+            <article class="feature-card"><span class="feature-icon purple">◷</span><h3>Protect your focus</h3><p>Give one task your full attention, log the session, then move on with a clear head.</p></article>
+            <article class="feature-card"><span class="feature-icon green">✳</span><h3>Make the work stick</h3><p>Save what you still can’t explain. Tomorrow, answer it from memory and decide what needs another look.</p></article>
+          </div>
+        </div>
+      </section>
+      <section id="pricing" class="pricing-section shell">
+        <div class="pricing-heading"><div><p class="eyebrow">THE RIGHT AMOUNT OF ROOM</p><h2>Start with a plan.<br><em>Scale with your ambition.</em></h2></div><p>Build your rhythm for free. Upgrade when your semester needs more space.</p></div>
+        <div class="pricing-grid">
+          <article class="price-card"><span class="plan-label">THE FREE PLAN</span><h3>Get it together</h3><p>A clear home for the work in front of you.</p><div class="price">₹0 <span>/ forever</span></div><ul><li>Up to 60 active tasks</li><li>Subjects and due dates</li><li>Focus timer and Tomorrow Test</li></ul><button class="button button-outline" data-auth="register">Start for free</button></article>
+          <article class="price-card featured"><span class="plan-label">STUDYVELLA PRO</span><h3>Do more, calmly</h3><p>More room and perspective for a full semester.</p><div class="price" id="landing-pro-price">Flexible pricing</div><ul><li>Unlimited active tasks</li><li>Weekly study insights</li><li>Export tasks to CSV</li></ul><button class="button button-dark" data-auth="register">Explore Pro</button></article>
+        </div>
+      </section>
+      <section class="cta-section"><div class="shell cta-inner"><div><p class="eyebrow">YOUR NEXT MOVE</p><h2>Have a lot going on.<br>Keep it all clear.</h2></div><button class="button button-light button-large" data-auth="register">Make your plan ↗</button></div></section>
+    </main>
+    <footer class="site-footer shell"><span class="brand"><span class="brand-mark">S</span> Studyvella<span class="brand-dot">.</span></span><nav class="footer-links" aria-label="Information"><a href="/about">About</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/refunds">Refunds</a></nav><span>© <span id="year"></span> Studyvella</span></footer>
+  </div>
+
+  <main id="auth-view" class="auth-page" hidden>
+    <button id="back-home" class="back-link">← Back to home</button>
+    <div class="auth-card"><div class="brand"><span class="brand-mark">S</span> Studyvella<span class="brand-dot">.</span></div><p class="eyebrow">YOUR PLANS START HERE</p><h1 id="auth-heading">Create your account</h1><p id="auth-subheading">A lot to do. A clear way through.</p>
+      <form id="auth-form"><label id="name-field">Your name<input name="name" autocomplete="name" maxlength="80" placeholder="Alex Taylor"></label><label id="email-field">Email address<input name="email" type="email" required autocomplete="email" placeholder="you@example.com"></label><label id="password-field">Password<input name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters"></label><button class="button button-dark button-full" id="auth-submit" type="submit">Create free account</button></form>
+      <p class="auth-switch" id="auth-switch">Already have an account? <button class="inline-button" data-auth="login">Log in</button></p>
+      <p class="auth-policy">By using Studyvella, you agree to our <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
+    </div>
+  </main>
+
+  <div id="app-view" class="app-layout" hidden>
+    <aside class="sidebar">
+      <div class="sidebar-top"><a class="brand" href="/" aria-label="Studyvella dashboard"><span class="brand-mark">S</span> Studyvella<span class="brand-dot">.</span></a><p>THE WORK SPACE</p></div>
+      <nav class="side-nav" aria-label="Planner views"><button class="side-link active" data-view="today"><span>◫</span> Today</button><button class="side-link" data-view="upcoming"><span>▦</span> Upcoming</button><button class="side-link" data-view="all"><span>≡</span> All tasks</button><button class="side-link" data-view="completed"><span>✓</span> Completed</button><button class="side-link" data-view="tomorrow"><span>✳</span> Tomorrow Test <small id="tomorrow-nav-count" class="nav-count" hidden>0</small></button><button class="side-link" data-view="insights"><span>↗</span> Study insights ✦</button></nav>
+      <div class="sidebar-subjects"><div class="sidebar-section-title"><span>SUBJECTS</span><button id="add-subject" aria-label="Add a subject" title="Add a subject">+</button></div><div id="subject-nav"></div></div>
+      <div class="sidebar-bottom"><button class="upgrade-card" id="sidebar-upgrade"><span>✦ STUDYVELLA PRO</span><strong>More room for your next move.</strong><small>See what’s included ↗</small></button><div class="profile"><div class="avatar" id="avatar">A</div><div><strong id="profile-name">Student</strong><small id="profile-plan">Free plan</small></div><button id="logout-button" aria-label="Log out" title="Log out">↪</button></div></div>
+    </aside>
+    <div class="app-main">
+      <header class="mobile-header"><span class="brand"><span class="brand-mark">S</span> Studyvella<span class="brand-dot">.</span></span><button id="mobile-menu" aria-label="Open menu">☰</button></header>
+      <div class="dashboard-wrap">
+        <header class="dashboard-heading"><div><p class="eyebrow" id="date-label"></p><h1 id="view-title">A lot to do. You have a plan.</h1><p id="view-description">Start with the next move.</p></div><button class="button button-dark" id="new-task-button">+ New task</button></header>
+        <section class="summary-grid" aria-label="Your progress"><div class="summary-card"><span class="summary-icon peach">✓</span><div><strong id="done-count">0</strong><small>Done today</small></div></div><div class="summary-card"><span class="summary-icon lilac">◷</span><div><strong id="focus-count">0 min</strong><small>Focused today</small></div></div><div class="summary-card"><span class="summary-icon mint">▦</span><div><strong id="upcoming-count">0</strong><small>Coming up</small></div></div></section>
+        <div class="content-grid"><section class="task-panel" id="task-panel"><div class="panel-heading"><div><p class="eyebrow">THE AGENDA</p><h2 id="task-list-title">Today’s tasks <span id="task-count">0</span></h2></div></div><div class="task-toolbar"><label class="search-box"><span>⌕</span><input id="task-search" type="search" placeholder="Search tasks or subjects" aria-label="Search tasks or subjects"></label><select id="status-filter" aria-label="Filter tasks"><option value="open">To do</option><option value="all">All</option><option value="done">Done</option></select></div><div id="task-list" class="task-list"></div></section>
+          <section class="task-panel insights-panel" id="insights-panel" hidden><p class="eyebrow">THE LAST SEVEN DAYS</p><h2>Your focus, in perspective.</h2><p>Every study session adds to the bigger picture.</p><div class="insight-stats"><div><strong id="insight-total">0 min</strong><span>Focused this week</span></div><div><strong id="insight-sessions">0</strong><span>Study sessions</span></div></div><h3>Focus by day</h3><div class="insight-chart" id="insight-bars"></div><h3>Time by subject</h3><div id="insight-subjects" class="insight-subjects"></div></section>
+          <section class="task-panel tomorrow-panel" id="tomorrow-panel" hidden><div class="panel-heading"><div><p class="eyebrow">REMEMBER WHAT MATTERS</p><h2>The Tomorrow Test</h2></div><button class="button button-outline button-small" id="new-test-button">+ Save a question</button></div><p class="tomorrow-intro">After studying, capture one thing you can’t explain yet. Come back tomorrow and try it from memory before deciding if it’s clear.</p><div id="tomorrow-list" class="tomorrow-list"></div></section>
+          <aside class="right-rail"><section class="focus-card"><div class="focus-card-top"><span>◷</span><span>THE FOCUS BLOCK</span></div><h2>One move.<br>Full focus.</h2><p>Give this moment your attention. The rest has a place.</p><div class="timer-face" id="timer-display">25:00</div><label class="timer-subject-label">Studying<select id="timer-subject"></select></label><div class="timer-presets"><button class="selected" data-minutes="25">25 min</button><button data-minutes="50">50 min</button></div><div class="timer-actions"><button class="button button-dark" id="timer-toggle">Start focus</button><button class="timer-reset" id="timer-reset" aria-label="Reset timer" title="Reset timer">↺</button></div></section><section class="mini-note"><span>✳</span><p>A full plate can still come with a clear head.</p></section></aside></div>
+      </div>
+      <footer class="app-legal-links"><a href="/about">About</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/refunds">Refunds</a></footer>
+    </div>
+  </div>
+
+  <dialog id="task-dialog" class="modal"><form id="task-form"><div class="modal-top"><div><p class="eyebrow">YOUR STUDY PLAN</p><h2 id="task-dialog-title">Add a task</h2></div><button type="button" class="modal-close" data-close="task-dialog" aria-label="Close">×</button></div><label>What needs to get done?<input name="title" maxlength="160" required placeholder="e.g. Revise chapter 4"></label><label>Notes <span>(optional)</span><textarea name="description" maxlength="2000" rows="3" placeholder="Add a little more detail"></textarea></label><div class="form-row"><label>Subject<input name="project" maxlength="40" required list="subject-options" placeholder="e.g. Biology"><datalist id="subject-options"></datalist></label><label>Due date<input name="dueDate" type="date"></label></div><label>Priority<select name="priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label><div class="modal-actions"><button type="button" class="button button-outline" data-close="task-dialog">Cancel</button><button type="submit" class="button button-dark" id="task-save">Save task</button></div></form></dialog>
+
+  <dialog id="test-dialog" class="modal"><form id="test-form"><div class="modal-top"><div><p class="eyebrow">THE TOMORROW TEST</p><h2>Save what’s still fuzzy</h2></div><button type="button" class="modal-close" data-close="test-dialog" aria-label="Close">×</button></div><p class="dialog-intro">Write one question you want to answer from memory tomorrow.</p><label>Subject<input name="subject" maxlength="40" required list="subject-options" placeholder="e.g. Biology"></label><label>What can’t you explain yet?<textarea name="question" maxlength="200" rows="3" required placeholder="e.g. Why does the cell need ATP?"></textarea></label><label>Your current thought <span>(optional)</span><textarea name="initialThought" maxlength="500" rows="3" placeholder="What do you think the answer is right now?"></textarea></label><div class="modal-actions"><button type="button" class="button button-outline" data-close="test-dialog">Nothing unclear</button><button type="submit" class="button button-dark" id="test-save">Ask me tomorrow</button></div></form></dialog>
+
+  <dialog id="review-dialog" class="modal"><div class="modal-top"><div><p class="eyebrow">ANSWER FROM MEMORY</p><h2 id="review-subject">Tomorrow Test</h2></div><button type="button" class="modal-close" data-close="review-dialog" aria-label="Close">×</button></div><p id="review-question" class="review-question"></p><label class="review-answer-label">Your answer<textarea id="review-answer" maxlength="1000" rows="5" required placeholder="Explain it without checking your notes first."></textarea></label><div id="review-reveal-row" class="modal-actions"><button class="button button-dark" id="review-reveal">Show my earlier thought</button></div><div id="review-decision" hidden><div class="earlier-thought"><strong>Your earlier thought</strong><p id="review-initial-thought"></p></div><p class="review-help">Check your notes if needed, then rate your understanding honestly.</p><div class="modal-actions review-actions"><button class="button button-outline" data-outcome="again">Still fuzzy — ask tomorrow</button><button class="button button-dark" data-outcome="clear">I can explain it now</button></div></div></dialog>
+
+  <dialog id="plan-dialog" class="modal plan-modal"><div class="modal-top"><div><p class="eyebrow">PLANS THAT GROW WITH YOU</p><h2>Your Studyvella plan</h2></div><button type="button" class="modal-close" data-close="plan-dialog" aria-label="Close">×</button></div><p id="current-plan-copy"></p><div class="plan-comparison"><div><strong>Free</strong><span>60 active tasks</span><span>Subjects + focus sessions</span><span>Tomorrow Test</span></div><div><strong>Pro <span>✦</span></strong><span>Unlimited active tasks</span><span>Weekly study insights</span><span>Export tasks to CSV</span></div></div><p class="plan-price" id="plan-price"></p><button id="plan-action" class="button button-dark button-full">Upgrade to Pro</button><button id="plan-cancel" class="button button-outline button-full" hidden>Cancel Pro at period end</button><button id="export-button" class="button button-outline button-full" hidden>Export tasks to CSV</button><p class="plan-footnote" id="plan-footnote"></p><p class="plan-policy"><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds & cancellation</a></p></dialog>
+</body>
+</html>

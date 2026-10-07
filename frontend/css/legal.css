@@ -1,0 +1,16 @@
+:root { color: #171217; background: #fff; }
+body { font-family: "Times New Roman", Times, serif; }
+.legal-header, .legal-footer { width: min(1080px, calc(100% - 40px)); margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+.legal-header { padding: 28px 0; border-bottom: 1px solid #dfd2da; }
+.legal-header > a:last-child { color: #76556d; font-size: 16px; }
+.legal-main { width: min(730px, calc(100% - 40px)); margin: 65px auto 90px; }
+.legal-main h1 { font-family: "The Seasons", Georgia, "Times New Roman", serif; font-size: clamp(42px, 7vw, 68px); font-weight: 400; letter-spacing: -2px; margin: 0 0 10px; }
+.legal-date { color: #76556d; margin: 0 0 48px; }
+.legal-main section { border-top: 1px solid #dfd2da; padding: 24px 0; }
+.legal-main h2 { font-size: 25px; font-weight: 400; margin: 0 0 12px; }
+.legal-main section p { color: #514450; font-size: 18px; line-height: 1.7; margin: 0; }
+.legal-main section a { color: #76556d; text-decoration: underline; text-underline-offset: 3px; }
+.legal-footer { border-top: 1px solid #dfd2da; padding: 24px 0 40px; color: #76556d; font-size: 14px; }
+.legal-footer nav { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.legal-footer a:hover, .legal-header > a:last-child:hover { text-decoration: underline; }
+@media (max-width: 620px) { .legal-header, .legal-footer { align-items: flex-start; flex-direction: column; } .legal-main { margin: 50px auto 70px; } .legal-main section p { font-size: 16px; } }

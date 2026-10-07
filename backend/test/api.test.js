@@ -8,6 +8,8 @@ process.env.RAZORPAY_WEBHOOK_SECRET = 'test_webhook_secret';
 process.env.BUSINESS_NAME = 'Studyvella Test Business';
 process.env.SUPPORT_EMAIL = 'support@example.com';
 process.env.REFUND_POLICY = '7-day-first-charge';
+process.env.RESEND_API_KEY = 're_test_key';
+process.env.RESEND_FROM_EMAIL = 'support@example.com';
 const app = require('../server');
 const { db } = require('../db');
 let server;

@@ -4,7 +4,7 @@ require('dotenv').config();
 if (!process.env.APP_URL && process.env.RENDER_EXTERNAL_URL) process.env.APP_URL = process.env.RENDER_EXTERNAL_URL;
 require('./db');
 
-const { router: auth, requireAuth, sendError } = require('./auth');
+const { router: auth, requireAuth, sendError, passwordResetConfigured } = require('./auth');
 const { router: tasks } = require('./tasks');
 const { router: billing, configured: billingConfigured, PRO_LABEL } = require('./billing');
 const { router: legal, legalReady } = require('./legal');
@@ -34,7 +34,7 @@ app.use(express.json({ limit: '32kb' }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.get('/api/config', async (req, res) => {
-  if (!billingConfigured() || !legalReady()) return res.json({ freeTaskLimit: 60, billingEnabled: false, proPriceLabel: PRO_LABEL });
+  if (!billingConfigured() || !legalReady() || !passwordResetConfigured()) return res.json({ freeTaskLimit: 60, billingEnabled: false, proPriceLabel: PRO_LABEL });
   try {
     const { proPrice } = require('./billing');
     const price = await proPrice();

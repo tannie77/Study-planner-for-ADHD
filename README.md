@@ -48,7 +48,7 @@ SUPPORT_EMAIL=help@your-domain.example
 REFUND_POLICY=7-day-first-charge
 ```
 
-Paid checkout also requires the public Contact, About, Privacy, Terms, and Refunds pages to be complete. Set the real business name, a working support inbox, and a reviewed refund choice (`7-day-first-charge` or `no-refunds`). Optional `SUPPORT_PHONE` and `BUSINESS_ADDRESS` appear on the Contact page when supplied. When those required details are missing, paid checkout remains disabled. Review these policy drafts for your business before inviting paying customers.
+Paid checkout also requires the public Contact, About, Privacy, Terms, and Refunds pages to be complete, and password recovery email to be configured. Set the real business name, a working support inbox, and a reviewed refund choice (`7-day-first-charge` or `no-refunds`). Optional `SUPPORT_PHONE` and `BUSINESS_ADDRESS` appear on the Contact page when supplied. When those required details are missing, paid checkout remains disabled. Review these policy drafts for your business before inviting paying customers.
 
 The site enables upgrades only after it retrieves and validates the configured plan. Students authorise payments in Razorpay Checkout. The app verifies the checkout signature and updates Pro access from live subscription status and signed webhooks. Students can schedule cancellation at the end of the current billing period in the app. Razorpay requires a bounded subscription; this integration creates 120 monthly billing cycles (ten years). Before then, a customer who wants to continue would need a new subscription.
 

@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const express = require('express');
 const { db, sql } = require('./db');
-const { requireAuth, sendError } = require('./auth');
+const { requireAuth, sendError, passwordResetConfigured } = require('./auth');
 const { legalReady } = require('./legal');
 
 const router = express.Router();
@@ -142,7 +142,7 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
 router.use(express.json({ limit: '16kb' }));
 
 router.post('/checkout', requireAuth, async (req, res) => {
-  if (!configured() || !legalReady()) return sendError(res, 503, 'Billing is not configured yet.');
+  if (!configured() || !legalReady() || !passwordResetConfigured()) return sendError(res, 503, 'Billing is not configured yet.');
   try {
     await proPrice();
     if (req.user.razorpay_subscription_id) {

@@ -174,4 +174,4 @@ router.post('/logout', (req, res) => {
 
 router.get('/me', requireAuth, (req, res) => res.json({ user: publicUser(req.user) }));
 
-module.exports = { router, requireAuth, publicUser, sendError, FREE_TASK_LIMIT };
+module.exports = { router, requireAuth, publicUser, sendError, passwordResetConfigured, FREE_TASK_LIMIT };

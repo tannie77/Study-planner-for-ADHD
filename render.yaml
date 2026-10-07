@@ -20,5 +20,7 @@ services:
         value: /var/data/studyvella.sqlite
       - key: BUSINESS_NAME
         value: Studyvella
+      - key: CONTACT_NAME
+        value: Tan
       - key: REFUND_POLICY
         value: 7-day-first-charge

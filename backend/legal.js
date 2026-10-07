@@ -10,11 +10,27 @@ function details() {
   const email = process.env.SUPPORT_EMAIL?.trim() || '';
   return {
     owner: process.env.BUSINESS_NAME?.trim() || 'Studyvella',
+    contactName: process.env.CONTACT_NAME?.trim() || 'Tan',
     email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '',
     phone: process.env.SUPPORT_PHONE?.trim() || '',
     address: process.env.BUSINESS_ADDRESS?.trim() || '',
     refund: process.env.REFUND_POLICY || '',
   };
+}
+
+function socialProfile(label, key, domains) {
+  const value = process.env[key]?.trim();
+  if (!value) return `<span class="social-pending">${label} <small>link coming soon</small></span>`;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password ||
+        !domains.some(domain => url.hostname === domain || url.hostname.endsWith(`.${domain}`))) {
+      throw new Error('Invalid social profile URL');
+    }
+    return `<a href="${escapeHtml(url.href)}" target="_blank" rel="noopener noreferrer">${label} ↗</a>`;
+  } catch {
+    return `<span class="social-pending">${label} <small>link coming soon</small></span>`;
+  }
 }
 
 function legalReady() {
@@ -43,9 +59,16 @@ router.get('/contact', (req, res) => {
   const contact = data.email
     ? `Email <a href="mailto:${escapeHtml(data.email)}">${escapeHtml(data.email)}</a> for account help, billing questions, refund requests, and privacy requests.`
     : 'Our public support address is being finalized. Paid subscriptions are not available until it is published.';
+  const profiles = [
+    socialProfile('Instagram', 'INSTAGRAM_URL', ['instagram.com']),
+    socialProfile('LinkedIn', 'LINKEDIN_URL', ['linkedin.com']),
+    socialProfile('YouTube', 'YOUTUBE_URL', ['youtube.com', 'youtu.be']),
+    socialProfile('Pinterest', 'PINTEREST_URL', ['pinterest.com', 'pin.it']),
+  ];
   res.send(page('Contact Studyvella', 'WE ARE HERE TO HELP',
     section('Support', contact) +
-    section('Business details', `<strong>${escapeHtml(data.owner)}</strong>${data.address ? `<br>${escapeHtml(data.address).replace(/\n/g, '<br>')}` : ''}${data.phone ? `<br>Phone: ${escapeHtml(data.phone)}` : ''}`) +
+    section('Contact', `<strong>${escapeHtml(data.contactName)}</strong><br>${escapeHtml(data.owner)}${data.address ? `<br>${escapeHtml(data.address).replace(/\n/g, '<br>')}` : ''}<br>${data.phone ? `Phone: ${escapeHtml(data.phone)}` : 'Example phone: +91 00000 00000 (not monitored)'}`) +
+    `<section><h2>Find ${escapeHtml(data.contactName)} online</h2><div class="social-links">${profiles.join('')}</div></section>` +
     section('Before you write', 'For password access, use “Forgot password?” on the login screen. For a Pro subscription, you can check its status or schedule cancellation from your plan settings.')));
 });
 

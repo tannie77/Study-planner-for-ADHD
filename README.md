@@ -6,7 +6,7 @@ Studyvella is a student-focused study planner. Students can create a private acc
 
 The Tomorrow Test turns an unclear point into a next-day memory check: save one question (and optionally your current thought), answer it from memory when it is due, then mark it clear or schedule it again for tomorrow. The focus timer offers this prompt at the end of a session, and students can also add questions manually. It is a self-assessment tool; the app does not grade answers.
 
-“Studyvella” is a working name. Check trademark and domain availability before a public launch.
+Check trademark and domain availability before a public launch.
 
 ## Run locally
 
@@ -27,14 +27,15 @@ Run the API tests with `npm test` from `todo-app/backend`.
 | Plan | Included |
 | --- | --- |
 | Free | 60 active tasks, unlimited subjects, due dates, priority, focus timer, study log, Tomorrow Test |
-| Pro | Unlimited active tasks, weekly study insights, and CSV task export, plus everything in Free |
+| Pro monthly — ₹299/month | Unlimited active tasks, weekly study insights, and CSV task export, plus everything in Free; renews monthly until cancelled |
+| Pro upfront — ₹2,999 once | The same Pro features for 15 months from payment; no automatic renewal or additional payment during that term |
 
-Completed tasks do not count toward the Free active-task limit. Pro is ₹299 per month. The app verifies that the Razorpay plan is exactly ₹299 monthly in INR before enabling upgrades. The plan design is a starting hypothesis; profitability depends on acquisition, retention, pricing, and costs.
+Completed tasks do not count toward the Free active-task limit. The upfront pass saves ₹1,486 against 15 monthly payments (₹4,485). The app verifies that the Razorpay subscription plan is exactly ₹299 monthly in INR before enabling either checkout. Profitability depends on acquisition, retention, pricing, and costs.
 
-## Enable paid subscriptions
+## Enable paid plans
 
 1. Create a Razorpay merchant account. In Test Mode, open Account & Settings → API Keys → Generate Key and save the Key ID and Key Secret privately. Then open Subscriptions → Plans → + New Plan. Name it Studyvella Pro, set the billing amount to ₹299 INR and the frequency to Monthly, then copy its `plan_...` ID. See Razorpay's [API key](https://razorpay.com/docs/api/authentication) and [plan creation](https://razorpay.com/docs/payments/subscriptions/create-plans) guides.
-2. Register a webhook at `https://YOUR_DOMAIN/api/billing/webhook` in Razorpay Dashboard → Account & Settings → Webhooks. Set a strong webhook secret. Subscribe to `subscription.authenticated`, `subscription.activated`, `subscription.charged`, `subscription.pending`, `subscription.halted`, `subscription.cancelled`, `subscription.paused`, `subscription.resumed`, `subscription.completed`, and `subscription.updated`. See [Razorpay subscription webhooks](https://razorpay.com/docs/payments/subscriptions/subscribe-to-webhooks).
+2. Register a webhook at `https://YOUR_DOMAIN/api/billing/webhook` in Razorpay Dashboard → Account & Settings → Webhooks. Set a strong webhook secret. Subscribe to `subscription.authenticated`, `subscription.activated`, `subscription.charged`, `subscription.pending`, `subscription.halted`, `subscription.cancelled`, `subscription.paused`, `subscription.resumed`, `subscription.completed`, `subscription.updated`, `payment.captured`, `order.paid`, and `refund.processed`. See [Razorpay subscription webhooks](https://razorpay.com/docs/payments/subscriptions/subscribe-to-webhooks) and [payment webhook events](https://razorpay.com/docs/webhooks/payments/).
 3. Set these variables in `backend/.env` or your hosting environment:
 
 ```text
@@ -48,11 +49,11 @@ SUPPORT_EMAIL=help@your-domain.example
 REFUND_POLICY=7-day-first-charge
 ```
 
-Paid checkout also requires the public Contact, About, Privacy, Terms, and Refunds pages to be complete, and password recovery email to be configured. Set the real business name, a working support inbox, and a reviewed refund choice (`7-day-first-charge` or `no-refunds`). Optional `SUPPORT_PHONE` and `BUSINESS_ADDRESS` appear on the Contact page when supplied. When those required details are missing, paid checkout remains disabled. Review these policy drafts for your business before inviting paying customers.
+Paid checkout also requires the public Contact, About, Privacy, Terms, and Refunds pages to be complete, and password recovery email to be configured. Set the real business name, a working support inbox, and a reviewed monthly refund choice (`7-day-first-charge` or `no-refunds`). The upfront pass policy is no refunds after purchase, subject to required legal exceptions and billing errors. Optional `SUPPORT_PHONE` and `BUSINESS_ADDRESS` appear on the Contact page when supplied. When those required details are missing, paid checkout remains disabled. Review these policy drafts for your business before inviting paying customers.
 
-The site enables upgrades only after it retrieves and validates the configured plan. Students authorise payments in Razorpay Checkout. The app verifies the checkout signature and updates Pro access from live subscription status and signed webhooks. Students can schedule cancellation at the end of the current billing period in the app. Razorpay requires a bounded subscription; this integration creates 120 monthly billing cycles (ten years). Before then, a customer who wants to continue would need a new subscription.
+The site enables upgrades only after it retrieves and validates the configured monthly plan. Students authorise payments in Razorpay Checkout. Monthly access follows live subscription status and signed webhooks. The 15-month pass creates a one-time Razorpay Order for ₹2,999 (299900 paise); after verifying the checkout signature, captured payment, order status, amount, currency, and owner, the app grants access through the exact expiry date. A signed payment webhook can also grant access if the browser callback is missed. Full refunds revoke the pass. The pass has no automatic renewal. Students can schedule cancellation of monthly billing at the end of the current billing period. Razorpay requires a bounded subscription; this integration creates 120 monthly billing cycles (ten years). Before then, a customer who wants to continue would need a new subscription.
 
-Run `npm run billing:check` from `todo-app/backend` after setting the variables. It verifies the Razorpay plan and prints the webhook URL. Then test checkout, a successful charge, a failed charge, and cancellation with test keys and a public test webhook URL. Replace test keys, plan ID, and webhook secret with their live equivalents only after the test flow works. When variables are absent, paid checkout stays disabled. Keep the Key Secret and webhook secret out of frontend files and Git.
+Run `npm run billing:check` from `todo-app/backend` after setting the variables. It verifies the Razorpay plan and prints the webhook URL. Then test monthly checkout, a successful charge, a failed charge, cancellation, one-time checkout, expiry, and refund handling with test keys and a public test webhook URL. Replace test keys, plan ID, and webhook secret with their live equivalents only after the test flow works. When variables are absent, paid checkout stays disabled. Keep the Key Secret and webhook secret out of frontend files and Git.
 
 ## Password recovery
 
@@ -77,6 +78,6 @@ The login screen has a “Forgot password?” flow. It emails a one-hour, single
 - `backend/tasks.js` — private task CRUD and plan limits
 - `backend/study.js` — focus-session log
 - `backend/tomorrow-tests.js` — private question capture and next-day review
-- `backend/billing.js` — Razorpay subscriptions, checkout verification, cancellation, signed webhooks
+- `backend/billing.js` — Razorpay subscriptions, one-time orders, checkout verification, cancellation, signed webhooks
 - `backend/db.js` — SQLite tables and queries
 - `frontend/` — responsive website

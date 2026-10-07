@@ -16,6 +16,8 @@ db.exec(`
     password_hash TEXT NOT NULL,
     password_salt TEXT NOT NULL,
     plan TEXT NOT NULL DEFAULT 'free',
+    monthly_active INTEGER NOT NULL DEFAULT 0,
+    upfront_expires_at TEXT,
     razorpay_customer_id TEXT,
     razorpay_subscription_id TEXT,
     razorpay_cancel_requested_at TEXT,
@@ -48,6 +50,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS tasks_user_due ON tasks(user_id, due_date, completed);
   CREATE TABLE IF NOT EXISTS razorpay_events (id TEXT PRIMARY KEY, received_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS upfront_orders (
+    order_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    payment_id TEXT UNIQUE,
+    paid_at TEXT,
+    expires_at TEXT,
+    refunded_at TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS upfront_orders_user ON upfront_orders(user_id, expires_at);
   CREATE TABLE IF NOT EXISTS study_sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -79,6 +93,14 @@ const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map(col
 if (!userColumns.has('razorpay_customer_id')) db.exec('ALTER TABLE users ADD COLUMN razorpay_customer_id TEXT');
 if (!userColumns.has('razorpay_subscription_id')) db.exec('ALTER TABLE users ADD COLUMN razorpay_subscription_id TEXT');
 if (!userColumns.has('razorpay_cancel_requested_at')) db.exec('ALTER TABLE users ADD COLUMN razorpay_cancel_requested_at TEXT');
+if (!userColumns.has('monthly_active')) {
+  db.exec('ALTER TABLE users ADD COLUMN monthly_active INTEGER NOT NULL DEFAULT 0');
+  db.exec("UPDATE users SET monthly_active = 1 WHERE plan = 'pro' AND razorpay_subscription_id IS NOT NULL");
+}
+if (!userColumns.has('upfront_expires_at')) db.exec('ALTER TABLE users ADD COLUMN upfront_expires_at TEXT');
+
+const effectivePlan = user => user.monthly_active ||
+  (user.upfront_expires_at && Date.parse(user.upfront_expires_at) > Date.now()) ? 'pro' : 'free';
 
 const sql = {
   userByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
@@ -102,6 +124,10 @@ const sql = {
   deleteTask: db.prepare('DELETE FROM tasks WHERE id = ? AND user_id = ?'),
   razorpayEvent: db.prepare('SELECT id FROM razorpay_events WHERE id = ?'),
   insertRazorpayEvent: db.prepare('INSERT INTO razorpay_events (id, received_at) VALUES (?, ?)'),
+  upfrontOrder: db.prepare('SELECT * FROM upfront_orders WHERE order_id = ?'),
+  pendingUpfrontOrder: db.prepare('SELECT * FROM upfront_orders WHERE user_id = ? AND paid_at IS NULL AND refunded_at IS NULL ORDER BY created_at DESC LIMIT 1'),
+  insertUpfrontOrder: db.prepare('INSERT INTO upfront_orders (order_id, user_id, amount, currency, created_at) VALUES (?, ?, ?, ?, ?)'),
+  latestUpfrontExpiry: db.prepare('SELECT MAX(expires_at) AS expires_at FROM upfront_orders WHERE user_id = ? AND paid_at IS NOT NULL AND refunded_at IS NULL'),
   studySessions: db.prepare('SELECT id, subject, minutes, local_date AS localDate, created_at AS createdAt FROM study_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 500'),
   studySessionsRange: db.prepare('SELECT subject, minutes, local_date AS localDate FROM study_sessions WHERE user_id = ? AND local_date BETWEEN ? AND ?'),
   insertStudySession: db.prepare('INSERT INTO study_sessions (id, user_id, subject, minutes, local_date, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
@@ -125,4 +151,4 @@ const publicTomorrowTest = test => ({
   lastReviewedAt: test.last_reviewed_at, createdAt: test.created_at, resolvedAt: test.resolved_at,
 });
 
-module.exports = { db, sql, publicTask, publicTomorrowTest };
+module.exports = { db, sql, effectivePlan, publicTask, publicTomorrowTest };

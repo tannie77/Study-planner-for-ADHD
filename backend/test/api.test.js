@@ -12,12 +12,16 @@ process.env.RESEND_API_KEY = 're_test_key';
 process.env.RESEND_FROM_EMAIL = 'support@example.com';
 const app = require('../server');
 const { db } = require('../db');
+const { addMonthsClamped } = require('../billing');
 let server;
 let base;
 const originalFetch = global.fetch;
 const subscriptions = new Map();
+const orders = new Map();
+const payments = new Map();
 const razorpayCalls = [];
 let nextSubscription = 1;
+let nextOrder = 1;
 let mockPlanAmount = 29900;
 before(async () => {
   server = app.listen(0, '127.0.0.1');
@@ -41,6 +45,15 @@ function mockRazorpay() {
         id: process.env.RAZORPAY_PLAN_ID, period: 'monthly', interval: 1,
         item: { unit_amount: mockPlanAmount, currency: 'INR', active: true },
       };
+    } else if (url.endsWith('/orders')) {
+      const body = JSON.parse(options.body);
+      const id = `order_Test${nextOrder++}`;
+      result = { id, amount: body.amount, currency: body.currency, notes: body.notes, status: 'created' };
+      orders.set(id, result);
+    } else if (url.includes('/orders/')) {
+      result = orders.get(url.split('/').at(-1));
+    } else if (url.includes('/payments/')) {
+      result = payments.get(url.split('/').at(-1));
     } else if (url.endsWith('/subscriptions')) {
       const body = JSON.parse(options.body);
       const id = `sub_Test${nextSubscription++}`;
@@ -48,7 +61,9 @@ function mockRazorpay() {
       subscriptions.set(id, result);
     } else if (url.endsWith('/cancel')) {
       const id = url.split('/').at(-2);
-      result = { ...subscriptions.get(id), has_scheduled_changes: true, change_scheduled_at: 1790000000 };
+      result = JSON.parse(options.body).cancel_at_cycle_end === false
+        ? { ...subscriptions.get(id), status: 'cancelled' }
+        : { ...subscriptions.get(id), has_scheduled_changes: true, change_scheduled_at: 1790000000 };
       subscriptions.set(id, result);
     } else if (url.includes('/subscriptions/')) {
       result = subscriptions.get(url.split('/').at(-1));
@@ -60,6 +75,19 @@ function mockRazorpay() {
 
 async function webhookEvent(id, type, subscriptionId) {
   const event = JSON.stringify({ event: type, payload: { subscription: { entity: { id: subscriptionId } } } });
+  const signature = crypto.createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET).update(event).digest('hex');
+  return originalFetch(`${base}/api/billing/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Razorpay-Signature': signature, 'X-Razorpay-Event-Id': id },
+    body: event,
+  });
+}
+
+async function paymentWebhookEvent(id, type, paymentId) {
+  const payload = type === 'refund.processed'
+    ? { refund: { entity: { payment_id: paymentId } } }
+    : { payment: { entity: { id: paymentId } } };
+  const event = JSON.stringify({ event: type, payload });
   const signature = crypto.createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET).update(event).digest('hex');
   return originalFetch(`${base}/api/billing/webhook`, {
     method: 'POST',
@@ -258,6 +286,69 @@ test('Razorpay checkout, payment verification, webhooks, and cancellation', asyn
   subscriptions.set(secondId, subscription(secondId, userId, 'active', 'plan_Other12345678'));
   assert.equal((await webhookEvent('evt_wrong_plan', 'subscription.updated', secondId)).status, 200);
   assert.equal((await request('/api/auth/me', { cookie })).data.user.plan, 'free');
+});
+
+test('15-month upfront pass is one charge, expires, and ends after a full refund', async () => {
+  assert.equal(addMonthsClamped('2026-01-31T10:00:00.000Z', 15), '2027-04-30T10:00:00.000Z');
+  const buyer = await request('/api/auth/register', { method: 'POST', body: { name: 'Anika', email: 'anika@example.com', password: 'strong-pass-123' } });
+  const other = await request('/api/auth/register', { method: 'POST', body: { name: 'Nila', email: 'nila@example.com', password: 'strong-pass-123' } });
+  const unstartedMonthly = await request('/api/billing/checkout', { method: 'POST', cookie: buyer.cookie });
+  assert.equal(unstartedMonthly.status, 200);
+  const checkout = await request('/api/billing/upfront/checkout', { method: 'POST', cookie: buyer.cookie });
+  assert.equal(checkout.status, 200);
+  assert.equal(subscriptions.get(unstartedMonthly.data.subscriptionId).status, 'cancelled');
+  assert.equal(checkout.data.amount, 299900);
+  assert.equal(checkout.data.currency, 'INR');
+  const orderId = checkout.data.orderId;
+  assert.equal((await request('/api/billing/upfront/checkout', { method: 'POST', cookie: buyer.cookie })).data.orderId, orderId);
+  const order = orders.get(orderId);
+  assert.equal(order.notes.studyvella_user_id, buyer.data.user.id);
+  assert.equal(order.notes.studyvella_product, 'upfront-15-months');
+  assert.equal((await request('/api/auth/me', { cookie: buyer.cookie })).data.user.plan, 'free');
+  const paymentId = 'pay_UpfrontTest1';
+  const signature = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET).update(`${orderId}|${paymentId}`).digest('hex');
+  const body = { razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: signature };
+  assert.equal((await request('/api/billing/upfront/verify', { method: 'POST', cookie: other.cookie, body })).status, 400);
+  assert.equal((await request('/api/billing/upfront/verify', { method: 'POST', cookie: buyer.cookie, body: { ...body, razorpay_signature: '0'.repeat(64) } })).status, 400);
+  orders.set(orderId, { ...order, status: 'paid' });
+  assert.equal((await request('/api/billing/upfront/checkout', { method: 'POST', cookie: buyer.cookie })).status, 409);
+  payments.set(paymentId, { id: paymentId, order_id: orderId, amount: 299900, currency: 'INR', status: 'authorized', amount_refunded: 0, created_at: Math.floor(Date.now() / 1000) });
+  const pending = await request('/api/billing/upfront/verify', { method: 'POST', cookie: buyer.cookie, body });
+  assert.equal(pending.status, 200);
+  assert.equal(pending.data.pending, true);
+  assert.equal((await request('/api/auth/me', { cookie: buyer.cookie })).data.user.plan, 'free');
+  payments.set(paymentId, { ...payments.get(paymentId), status: 'captured', amount: 100 });
+  assert.equal((await request('/api/billing/upfront/verify', { method: 'POST', cookie: buyer.cookie, body })).status, 502);
+  assert.equal((await request('/api/auth/me', { cookie: buyer.cookie })).data.user.plan, 'free');
+  payments.set(paymentId, { ...payments.get(paymentId), amount: 299900 });
+  const verified = await request('/api/billing/upfront/verify', { method: 'POST', cookie: buyer.cookie, body });
+  assert.equal(verified.status, 200);
+  assert.equal(verified.data.plan, 'pro');
+  const expiresAt = verified.data.expiresAt;
+  assert.ok(Date.parse(expiresAt) > Date.now() + 14 * 30 * 24 * 60 * 60 * 1000);
+  assert.equal((await request('/api/billing/upfront/verify', { method: 'POST', cookie: buyer.cookie, body })).data.expiresAt, expiresAt);
+  assert.equal((await request('/api/auth/me', { cookie: buyer.cookie })).data.user.upfrontExpiresAt, expiresAt);
+  assert.equal((await request('/api/billing/upfront/checkout', { method: 'POST', cookie: buyer.cookie })).status, 409);
+  assert.equal((await request('/api/billing/checkout', { method: 'POST', cookie: buyer.cookie })).status, 409);
+  payments.set(paymentId, { ...payments.get(paymentId), amount_refunded: 100 });
+  assert.equal((await paymentWebhookEvent('evt_partial_refund', 'payment.refunded', paymentId)).status, 200);
+  assert.equal((await request('/api/auth/me', { cookie: buyer.cookie })).data.user.plan, 'pro');
+  payments.set(paymentId, { ...payments.get(paymentId), amount_refunded: 299900, status: 'refunded' });
+  assert.equal((await paymentWebhookEvent('evt_full_refund', 'refund.processed', paymentId)).status, 200);
+  assert.equal((await request('/api/auth/me', { cookie: buyer.cookie })).data.user.plan, 'free');
+  const secondCheckout = await request('/api/billing/upfront/checkout', { method: 'POST', cookie: other.cookie });
+  const secondOrderId = secondCheckout.data.orderId;
+  const secondPaymentId = 'pay_UpfrontTest2';
+  orders.set(secondOrderId, { ...orders.get(secondOrderId), status: 'paid' });
+  payments.set(secondPaymentId, { id: secondPaymentId, order_id: secondOrderId, amount: 299900, currency: 'INR', status: 'captured', amount_refunded: 0, created_at: Math.floor(Date.now() / 1000) });
+  assert.equal((await paymentWebhookEvent('evt_upfront_capture', 'payment.captured', secondPaymentId)).status, 200);
+  assert.equal((await request('/api/auth/me', { cookie: other.cookie })).data.user.plan, 'pro');
+  const beforeOrderEvent = (await request('/api/auth/me', { cookie: other.cookie })).data.user.upfrontExpiresAt;
+  assert.equal((await paymentWebhookEvent('evt_upfront_order_paid', 'order.paid', secondPaymentId)).status, 200);
+  assert.equal((await request('/api/auth/me', { cookie: other.cookie })).data.user.upfrontExpiresAt, beforeOrderEvent);
+  db.prepare('UPDATE users SET upfront_expires_at = ? WHERE id = ?').run('2020-01-01T00:00:00.000Z', other.data.user.id);
+  assert.equal((await request('/api/auth/me', { cookie: other.cookie })).data.user.plan, 'free');
+  assert.equal((await request('/api/export/tasks.csv', { cookie: other.cookie })).status, 403);
 });
 
 test('free plan permits 60 active tasks, then reopens space when one is completed', async () => {

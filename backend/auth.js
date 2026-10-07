@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const { promisify } = require('node:util');
 const express = require('express');
-const { db, sql } = require('./db');
+const { db, sql, effectivePlan } = require('./db');
 
 const router = express.Router();
 const scrypt = promisify(crypto.scrypt);
@@ -13,10 +13,11 @@ const attempts = new Map();
 
 const hashToken = token => crypto.createHash('sha256').update(token).digest('hex');
 const publicUser = user => ({
-  id: user.id, name: user.name, email: user.email, plan: user.plan,
+  id: user.id, name: user.name, email: user.email, plan: effectivePlan(user),
   freeTaskLimit: FREE_TASK_LIMIT,
   hasBilling: require('./billing').configured(),
   hasSubscription: Boolean(user.razorpay_subscription_id),
+  upfrontExpiresAt: user.upfront_expires_at,
 });
 const sendError = (res, status, error, code) => res.status(status).json({ error, ...(code ? { code } : {}) });
 
@@ -38,6 +39,9 @@ function requireAuth(req, res, next) {
   const token = readCookie(req, 'studyvella_session');
   const user = token && sql.userBySession.get(hashToken(token), Date.now());
   if (!user) return sendError(res, 401, 'Please sign in to continue.');
+  const plan = effectivePlan(user);
+  if (user.plan !== plan) db.prepare('UPDATE users SET plan = ? WHERE id = ?').run(plan, user.id);
+  user.plan = plan;
   req.user = user;
   next();
 }

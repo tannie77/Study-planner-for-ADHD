@@ -1,7 +1,7 @@
 const $ = selector => document.querySelector(selector);
 const state = {
   user: null, config: null, tasks: [], sessions: [], tests: [], insights: null, view: 'today',
-  subject: null, status: 'open', search: '', authMode: 'register',
+  subject: null, status: 'open', search: '', authMode: 'register', requestedPlan: null,
   timerMinutes: 25, remaining: 25 * 60, timerEnd: null, timerInterval: null,
 };
 
@@ -90,6 +90,13 @@ async function enterApp(user) {
   $('#profile-name').textContent = user.name;
   $('#avatar').textContent = user.name.charAt(0).toUpperCase();
   await loadData();
+  if (state.requestedPlan) {
+    const chosen = state.requestedPlan;
+    state.requestedPlan = null;
+    openPlan();
+    const button = chosen === 'upfront' ? $('#plan-upfront') : $('#plan-action');
+    if (!button.disabled) button.focus();
+  }
 }
 
 function subjects() {
@@ -354,31 +361,42 @@ async function handleTaskAction(button) {
 
 function openPlan() {
   const pro = state.user.plan === 'pro';
+  const upfrontActive = state.user.upfrontExpiresAt && Date.parse(state.user.upfrontExpiresAt) > Date.now();
   const enabled = state.user.hasBilling && (state.config?.billingEnabled || state.user.hasSubscription);
-  $('#current-plan-copy').textContent = pro ? 'You’re on Pro. Keep planning without limits.' : `You’re on Free. You can keep up to ${state.user.freeTaskLimit} active tasks.`;
-  $('#plan-price').textContent = state.config?.proPriceLabel || 'Pro billing is being set up.';
-  $('#plan-action').textContent = pro || state.user.hasSubscription ? 'Check billing status' : 'Upgrade to Pro';
-  $('#plan-action').disabled = !enabled;
+  const expiryText = upfrontActive ? new Date(state.user.upfrontExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  $('#current-plan-copy').textContent = upfrontActive ? `Your 15-month Pro pass is active until ${expiryText}. No further payment is scheduled for this pass.` : pro ? 'You’re on Pro. Keep planning without limits.' : `You’re on Free. You can keep up to ${state.user.freeTaskLimit} active tasks.`;
+  $('#plan-price').textContent = `${state.config?.proPriceLabel || '₹299 / month'} or ${state.config?.upfrontPriceLabel || '₹2,999 once / 15 months'}`;
+  $('#plan-action').textContent = pro || state.user.hasSubscription ? 'Check monthly billing status' : 'Choose ₹299 monthly';
+  $('#plan-action').disabled = !enabled || Boolean(upfrontActive && !state.user.hasSubscription);
+  $('#plan-upfront').hidden = Boolean(pro);
+  $('#plan-upfront').disabled = !state.config?.billingEnabled;
   $('#plan-cancel').hidden = !pro || !enabled || !state.user.hasSubscription;
   $('#export-button').hidden = !pro;
-  $('#plan-footnote').textContent = enabled ? 'Secure recurring payments are handled by Razorpay.' : 'The site owner needs to configure payments before upgrades are available.';
+  $('#plan-footnote').textContent = enabled ? 'Payments are handled by Razorpay. The 15-month pass is a single charge and does not renew.' : 'The site owner needs to configure payments before upgrades are available.';
   $('#plan-dialog').showModal();
   if (enabled && state.user.hasSubscription) {
     api('/billing/status').then(status => {
       if (!$('#plan-dialog').open) return;
       $('#plan-footnote').textContent = billingStatusCopy(status);
       $('#plan-cancel').hidden = status.status !== 'active' || status.plan !== 'pro' || status.cancelScheduled;
+      $('#plan-upfront').disabled = !state.config?.billingEnabled || !['none', 'created', 'cancelled', 'completed', 'expired'].includes(status.status) || status.plan === 'pro';
+      if (status.plan !== 'pro') {
+        $('#plan-action').textContent = status.status === 'created' ? 'Continue ₹299 monthly checkout'
+          : ['cancelled', 'completed', 'expired'].includes(status.status) ? 'Choose ₹299 monthly' : 'Check monthly billing status';
+      }
       if (status.plan !== state.user.plan) refreshUser().catch(() => {});
     }).catch(() => {});
   }
 }
 
 function billingStatusCopy(status) {
+  if (status.upfrontExpiresAt && Date.parse(status.upfrontExpiresAt) > Date.now()) return `Your one-time Pro pass is active until ${new Date(status.upfrontExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}. No renewal is scheduled for this pass.`;
   if (status.cancelScheduled) return 'Cancellation is scheduled. Pro stays active until the current billing period ends.';
   if (status.status === 'active' && status.plan === 'pro') return 'Your ₹299 monthly subscription is active.';
   if (status.status === 'active') return 'Your first payment is still being confirmed.';
   if (status.status === 'pending' || status.status === 'halted') return 'A payment needs attention. Check the message from Razorpay to update your payment method.';
   if (status.status === 'authenticated') return 'Your subscription is being activated. Please check again shortly.';
+  if (status.status === 'created') return 'Monthly checkout has not been completed. You can continue it or choose the upfront pass, which closes the unstarted monthly checkout.';
   return `Subscription status: ${status.status}.`;
 }
 
@@ -412,7 +430,7 @@ async function planAction() {
       $('#plan-footnote').textContent = billingStatusCopy(status);
       $('#plan-cancel').hidden = status.status !== 'active' || status.plan !== 'pro' || status.cancelScheduled;
       await refreshUser();
-      return;
+      if (status.plan === 'pro' || !['created', 'cancelled', 'completed', 'expired'].includes(status.status)) return;
     }
     await loadRazorpayCheckout();
     const { key, subscriptionId } = await api('/billing/checkout', { method: 'POST' });
@@ -435,6 +453,48 @@ async function planAction() {
             for (let attempt = 1; attempt <= 4; attempt++) {
               setTimeout(async () => {
                 try { await api('/billing/status'); await refreshUser(); } catch { /* reload can refresh later */ }
+              }, attempt * 2500);
+            }
+          }
+        } catch (error) { toast(error.message, true); }
+      },
+      modal: { ondismiss: () => { button.disabled = false; } },
+    });
+    checkout.open();
+  } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+}
+
+async function upfrontAction() {
+  const button = $('#plan-upfront');
+  button.disabled = true;
+  try {
+    await loadRazorpayCheckout();
+    const { key, orderId, amount, currency } = await api('/billing/upfront/checkout', { method: 'POST' });
+    if (!/^rzp_(test|live)_[A-Za-z0-9]+$/.test(key) || !/^order_[A-Za-z0-9]+$/.test(orderId) || amount !== 299900 || currency !== 'INR') {
+      throw new Error('Invalid checkout details.');
+    }
+    $('#plan-dialog').close();
+    const checkout = new window.Razorpay({
+      key, order_id: orderId, amount, currency,
+      name: 'Studyvella',
+      description: 'Studyvella Pro — one payment for 15 months',
+      prefill: { name: state.user.name, email: state.user.email },
+      theme: { color: '#9A728A' },
+      handler: async response => {
+        try {
+          const result = await api('/billing/upfront/verify', { method: 'POST', body: JSON.stringify(response) });
+          await refreshUser();
+          toast(result.plan === 'pro' ? 'Your 15-month Pro pass is active.' : 'Payment received. Your Pro pass will activate shortly.');
+          if (result.pending) {
+            let activated = false;
+            for (let attempt = 1; attempt <= 4; attempt++) {
+              setTimeout(async () => {
+                if (activated) return;
+                try {
+                  const update = await api('/billing/upfront/verify', { method: 'POST', body: JSON.stringify(response) });
+                  if (update.plan === 'pro' && !activated) { activated = true; await refreshUser(); toast('Your 15-month Pro pass is active.'); }
+                } catch { /* the signed webhook can finish activation later */ }
               }, attempt * 2500);
             }
           }
@@ -514,7 +574,10 @@ function resetTimer() {
 
 document.addEventListener('click', event => {
   const authButton = event.target.closest('[data-auth]');
-  if (authButton) return showAuth(authButton.dataset.auth);
+  if (authButton) {
+    if (authButton.closest('#landing-view')) state.requestedPlan = authButton.dataset.plan || null;
+    return showAuth(authButton.dataset.auth);
+  }
   const closeButton = event.target.closest('[data-close]');
   if (closeButton) return document.getElementById(closeButton.dataset.close).close();
   const viewButton = event.target.closest('[data-view]');
@@ -587,6 +650,7 @@ $('#task-search').addEventListener('input', event => { state.search = event.targ
 $('#status-filter').addEventListener('change', event => { state.status = event.target.value; renderTasks(); });
 $('#sidebar-upgrade').addEventListener('click', openPlan);
 $('#plan-action').addEventListener('click', planAction);
+$('#plan-upfront').addEventListener('click', upfrontAction);
 $('#plan-cancel').addEventListener('click', cancelPlan);
 $('#export-button').addEventListener('click', () => { location.href = '/api/export/tasks.csv'; });
 $('#mobile-menu').addEventListener('click', () => $('.sidebar').classList.toggle('open'));
@@ -606,6 +670,7 @@ async function boot() {
   showTimer();
   try { state.config = await api('/config'); } catch { state.config = {}; }
   $('#landing-pro-price').textContent = state.config.proPriceLabel || 'Pricing coming soon';
+  $('#landing-upfront-price').innerHTML = `₹2,999 <span>/ 15 months, one payment</span>`;
   if (location.pathname === '/reset-password') {
     showAuth(new URLSearchParams(location.search).get('token') ? 'reset' : 'forgot');
     return;

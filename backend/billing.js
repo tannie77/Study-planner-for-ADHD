@@ -1,12 +1,14 @@
 const crypto = require('node:crypto');
 const express = require('express');
-const { db, sql } = require('./db');
+const { db, sql, effectivePlan } = require('./db');
 const { requireAuth, sendError, passwordResetConfigured } = require('./auth');
 const { legalReady } = require('./legal');
 
 const router = express.Router();
 const PRO_AMOUNT_PAISE = 29900;
 const PRO_LABEL = '₹299 / month';
+const UPFRONT_AMOUNT_PAISE = 299900;
+const UPFRONT_LABEL = '₹2,999 once / 15 months';
 const BILLING_CYCLES = 120; // Razorpay requires a bounded subscription; 120 months is ten years.
 let planCache;
 
@@ -36,6 +38,71 @@ function verifySignature(body, signature, secret) {
 function verifyCheckoutSignature(paymentId, subscriptionId, signature) {
   if (!validId(paymentId, 'pay') || !validId(subscriptionId, 'sub')) return false;
   return verifySignature(`${paymentId}|${subscriptionId}`, signature, process.env.RAZORPAY_KEY_SECRET);
+}
+
+function addMonthsClamped(isoDate, months) {
+  const date = new Date(isoDate);
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  const finalDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(day, finalDay));
+  return date.toISOString();
+}
+
+function syncUpfrontAccess(userId) {
+  const expiry = sql.latestUpfrontExpiry.get(userId)?.expires_at || null;
+  const user = sql.userById.get(userId);
+  const plan = effectivePlan({ ...user, upfront_expires_at: expiry });
+  db.prepare('UPDATE users SET upfront_expires_at = ?, plan = ? WHERE id = ?').run(expiry, plan, userId);
+  return { plan, expiresAt: expiry };
+}
+
+async function fetchPayment(paymentId) {
+  if (!validId(paymentId, 'pay')) throw new Error('Invalid payment reference.');
+  const payment = await razorpayApi(`payments/${paymentId}`);
+  if (payment.id !== paymentId) throw new Error('Razorpay returned a different payment.');
+  return payment;
+}
+
+async function confirmUpfrontPayment(orderId, paymentId) {
+  const saved = sql.upfrontOrder.get(orderId);
+  if (!saved) return null; // Other products can use this Razorpay account.
+  const [payment, order] = await Promise.all([fetchPayment(paymentId), razorpayApi(`orders/${orderId}`)]);
+  if (order.id !== orderId || order.amount !== UPFRONT_AMOUNT_PAISE ||
+      order.currency !== 'INR' || order.notes?.studyvella_user_id !== saved.user_id ||
+      order.notes?.studyvella_product !== 'upfront-15-months' ||
+      payment.order_id !== orderId ||
+      payment.amount !== UPFRONT_AMOUNT_PAISE || payment.currency !== 'INR' ||
+      saved.amount !== UPFRONT_AMOUNT_PAISE || saved.currency !== 'INR' ||
+      (saved.payment_id && saved.payment_id !== paymentId)) {
+    throw new Error('Upfront payment details do not match the order.');
+  }
+  if (order.status !== 'paid' || !['captured', 'refunded'].includes(payment.status)) {
+    const user = sql.userById.get(saved.user_id);
+    return { plan: effectivePlan(user), expiresAt: user.upfront_expires_at, pending: true };
+  }
+  if (payment.status === 'refunded' && !saved.paid_at && payment.amount_refunded < UPFRONT_AMOUNT_PAISE) {
+    throw new Error('Upfront refund details do not match the order.');
+  }
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const current = sql.upfrontOrder.get(orderId);
+    if (!current.paid_at && payment.status === 'captured') {
+      const paidAt = Number.isInteger(payment.created_at) && payment.created_at > 0
+        ? new Date(payment.created_at * 1000).toISOString() : new Date().toISOString();
+      const expiresAt = addMonthsClamped(paidAt, 15);
+      db.prepare('UPDATE upfront_orders SET payment_id = ?, paid_at = ?, expires_at = ? WHERE order_id = ?')
+        .run(paymentId, paidAt, expiresAt, orderId);
+    }
+    if (payment.amount_refunded >= UPFRONT_AMOUNT_PAISE) {
+      db.prepare('UPDATE upfront_orders SET refunded_at = COALESCE(refunded_at, ?) WHERE order_id = ?')
+        .run(new Date().toISOString(), orderId);
+    }
+    const access = syncUpfrontAccess(saved.user_id);
+    db.exec('COMMIT');
+    return access;
+  } catch (error) { db.exec('ROLLBACK'); throw error; }
 }
 
 async function razorpayApi(endpoint, body) {
@@ -82,15 +149,25 @@ function applySubscription(subscription, user) {
       user.razorpay_subscription_id !== subscription.id) {
     throw new Error('Subscription does not belong to this account.');
   }
-  const plan = subscription.status === 'active' && subscription.paid_count > 0 &&
-    subscription.plan_id === process.env.RAZORPAY_PLAN_ID ? 'pro' : 'free';
-  db.prepare('UPDATE users SET plan = ?, razorpay_customer_id = COALESCE(?, razorpay_customer_id) WHERE id = ?')
-    .run(plan, subscription.customer_id || null, user.id);
+  const monthlyActive = subscription.status === 'active' && subscription.paid_count > 0 &&
+    subscription.plan_id === process.env.RAZORPAY_PLAN_ID ? 1 : 0;
+  const plan = effectivePlan({ ...user, monthly_active: monthlyActive });
+  db.prepare('UPDATE users SET plan = ?, monthly_active = ?, razorpay_customer_id = COALESCE(?, razorpay_customer_id) WHERE id = ?')
+    .run(plan, monthlyActive, subscription.customer_id || null, user.id);
   return plan;
 }
 
 async function processEvent(eventId, event) {
   if (sql.razorpayEvent.get(eventId)) return;
+  const upfrontPaymentId = ['payment.captured', 'payment.refunded', 'order.paid'].includes(event.event)
+    ? event.payload?.payment?.entity?.id : event.event === 'refund.processed'
+      ? event.payload?.refund?.entity?.payment_id : null;
+  if (upfrontPaymentId) {
+    const payment = await fetchPayment(upfrontPaymentId);
+    if (validId(payment.order_id, 'order') && sql.upfrontOrder.get(payment.order_id)) {
+      await confirmUpfrontPayment(payment.order_id, upfrontPaymentId);
+    }
+  }
   const subscriptionId = event.event?.startsWith('subscription.')
     ? event.payload?.subscription?.entity?.id : null;
   if (event.event?.startsWith('subscription.') && !validId(subscriptionId, 'sub')) {
@@ -157,7 +234,8 @@ router.post('/checkout', requireAuth, async (req, res) => {
         applySubscription(current, req.user);
         return sendError(res, 409, 'A subscription already exists. Check its status before starting another.');
       }
-    } else if (req.user.plan === 'pro') {
+    }
+    if (req.user.plan === 'pro') {
       return sendError(res, 409, 'Your account is already on Pro.');
     }
     const subscription = await razorpayApi('subscriptions', {
@@ -170,12 +248,77 @@ router.post('/checkout', requireAuth, async (req, res) => {
     if (!validId(subscription.id, 'sub') || subscription.plan_id !== process.env.RAZORPAY_PLAN_ID) {
       throw new Error('Razorpay returned an invalid subscription.');
     }
-    db.prepare("UPDATE users SET plan = 'free', razorpay_subscription_id = ?, razorpay_customer_id = NULL, razorpay_cancel_requested_at = NULL WHERE id = ?")
+    db.prepare("UPDATE users SET plan = 'free', monthly_active = 0, razorpay_subscription_id = ?, razorpay_customer_id = NULL, razorpay_cancel_requested_at = NULL WHERE id = ?")
       .run(subscription.id, req.user.id);
     res.json({ key: process.env.RAZORPAY_KEY_ID, subscriptionId: subscription.id });
   } catch (error) {
     console.error('Razorpay checkout error:', error);
     sendError(res, 502, 'Could not open checkout. Please try again.');
+  }
+});
+
+router.post('/upfront/checkout', requireAuth, async (req, res) => {
+  if (!configured() || !legalReady() || !passwordResetConfigured()) return sendError(res, 503, 'Billing is not configured yet.');
+  try {
+    await proPrice();
+    if (req.user.plan === 'pro') return sendError(res, 409, 'Your account already has Pro access.');
+    if (req.user.razorpay_subscription_id) {
+      const current = await fetchSubscription(req.user.razorpay_subscription_id);
+      if (current.notes?.studyvella_user_id && current.notes.studyvella_user_id !== req.user.id) {
+        throw new Error('Subscription owner mismatch.');
+      }
+      if (current.status === 'created') {
+        const cancelled = await razorpayApi(`subscriptions/${current.id}/cancel`, { cancel_at_cycle_end: false });
+        if (cancelled.id !== current.id || cancelled.status !== 'cancelled') {
+          throw new Error('Could not close the unstarted monthly checkout.');
+        }
+        applySubscription(cancelled, req.user);
+      } else if (!['cancelled', 'completed', 'expired'].includes(current.status)) {
+        return sendError(res, 409, 'Your monthly subscription must finish before choosing the upfront pass.');
+      }
+    }
+    const pending = sql.pendingUpfrontOrder.get(req.user.id);
+    if (pending) {
+      const existing = await razorpayApi(`orders/${pending.order_id}`);
+      if (existing.id !== pending.order_id || existing.amount !== UPFRONT_AMOUNT_PAISE || existing.currency !== 'INR' ||
+          existing.notes?.studyvella_user_id !== req.user.id || existing.notes?.studyvella_product !== 'upfront-15-months') {
+        throw new Error('Existing upfront order does not match the account.');
+      }
+      if (['created', 'attempted'].includes(existing.status)) {
+        return res.json({ key: process.env.RAZORPAY_KEY_ID, orderId: existing.id, amount: UPFRONT_AMOUNT_PAISE, currency: 'INR' });
+      }
+      return sendError(res, 409, 'A previous payment is being confirmed. Please check again shortly or contact support.');
+    }
+    const order = await razorpayApi('orders', {
+      amount: UPFRONT_AMOUNT_PAISE, currency: 'INR',
+      receipt: `sv15_${crypto.randomBytes(12).toString('hex')}`,
+      notes: { studyvella_user_id: req.user.id, studyvella_product: 'upfront-15-months' },
+    });
+    if (!validId(order.id, 'order') || order.amount !== UPFRONT_AMOUNT_PAISE || order.currency !== 'INR') {
+      throw new Error('Razorpay returned an invalid order.');
+    }
+    sql.insertUpfrontOrder.run(order.id, req.user.id, UPFRONT_AMOUNT_PAISE, 'INR', new Date().toISOString());
+    res.json({ key: process.env.RAZORPAY_KEY_ID, orderId: order.id, amount: UPFRONT_AMOUNT_PAISE, currency: 'INR' });
+  } catch (error) {
+    console.error('Razorpay upfront checkout error:', error);
+    sendError(res, 502, 'Could not open checkout. Please try again.');
+  }
+});
+
+router.post('/upfront/verify', requireAuth, async (req, res) => {
+  if (!configured()) return sendError(res, 503, 'Billing is unavailable.');
+  const { razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: signature } = req.body || {};
+  const saved = validId(orderId, 'order') && sql.upfrontOrder.get(orderId);
+  if (!saved || saved.user_id !== req.user.id || !validId(paymentId, 'pay') ||
+      !verifySignature(`${saved.order_id}|${paymentId}`, signature, process.env.RAZORPAY_KEY_SECRET)) {
+    return sendError(res, 400, 'Payment verification failed.');
+  }
+  try {
+    const access = await confirmUpfrontPayment(orderId, paymentId);
+    res.json(access);
+  } catch (error) {
+    console.error('Razorpay upfront verification error:', error);
+    sendError(res, 502, 'Could not confirm the payment yet. Please check again shortly.');
   }
 });
 
@@ -197,13 +340,13 @@ router.post('/verify', requireAuth, async (req, res) => {
 });
 
 router.get('/status', requireAuth, async (req, res) => {
-  if (!req.user.razorpay_subscription_id) return res.json({ status: 'none', plan: req.user.plan });
+  if (!req.user.razorpay_subscription_id) return res.json({ status: 'none', plan: req.user.plan, upfrontExpiresAt: req.user.upfront_expires_at });
   if (!configured()) return sendError(res, 503, 'Billing status is unavailable.');
   try {
     const subscription = await fetchSubscription(req.user.razorpay_subscription_id);
     const plan = applySubscription(subscription, req.user);
     res.json({
-      status: subscription.status, plan,
+      status: subscription.status, plan, upfrontExpiresAt: req.user.upfront_expires_at,
       currentEnd: subscription.current_end || null,
       cancelScheduled: Boolean(req.user.razorpay_cancel_requested_at && subscription.status === 'active'),
     });
@@ -236,4 +379,4 @@ router.post('/cancel', requireAuth, async (req, res) => {
   }
 });
 
-module.exports = { router, configured, proPrice, verifySignature, PRO_LABEL };
+module.exports = { router, configured, proPrice, verifySignature, PRO_LABEL, UPFRONT_LABEL, addMonthsClamped };

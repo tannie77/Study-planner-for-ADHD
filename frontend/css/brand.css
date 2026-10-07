@@ -93,6 +93,11 @@ button, input, select, textarea { font-family: "Times New Roman", Times, serif; 
 .feature-card p { color: var(--muted); font-size: 15px; line-height: 1.55; }
 .pricing-heading > p { color: var(--muted); font-size: 16px; }
 .price-card { border-color: var(--line); border-radius: 1px; }
+.pricing-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.price-card { display: flex; flex-direction: column; }
+.price-card ul { flex: 1; }
+.plan-modal #plan-upfront { margin-top: 10px; }
+@media (max-width: 850px) { .pricing-grid { grid-template-columns: 1fr; } }
 .price-card.featured { background: var(--mauve-wash); border-color: var(--mauve); }
 .plan-label { color: var(--mauve-dark); }
 .price-card h3 { font-size: 30px; font-weight: 400; }

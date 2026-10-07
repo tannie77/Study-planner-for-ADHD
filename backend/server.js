@@ -6,7 +6,7 @@ require('./db');
 
 const { router: auth, requireAuth, sendError, passwordResetConfigured } = require('./auth');
 const { router: tasks } = require('./tasks');
-const { router: billing, configured: billingConfigured, PRO_LABEL } = require('./billing');
+const { router: billing, configured: billingConfigured, PRO_LABEL, UPFRONT_LABEL } = require('./billing');
 const { router: legal, legalReady } = require('./legal');
 const study = require('./study');
 const tomorrowTests = require('./tomorrow-tests');
@@ -35,14 +35,14 @@ app.use(express.json({ limit: '32kb' }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.get('/api/config', async (req, res) => {
-  if (!billingConfigured() || !legalReady() || !passwordResetConfigured()) return res.json({ freeTaskLimit: 60, billingEnabled: false, proPriceLabel: PRO_LABEL });
+  if (!billingConfigured() || !legalReady() || !passwordResetConfigured()) return res.json({ freeTaskLimit: 60, billingEnabled: false, proPriceLabel: PRO_LABEL, upfrontPriceLabel: UPFRONT_LABEL });
   try {
     const { proPrice } = require('./billing');
     const price = await proPrice();
-    res.json({ freeTaskLimit: 60, billingEnabled: true, proPriceLabel: price.label });
+    res.json({ freeTaskLimit: 60, billingEnabled: true, proPriceLabel: price.label, upfrontPriceLabel: UPFRONT_LABEL });
   } catch (error) {
     console.error('Razorpay plan check error:', error.message);
-    res.json({ freeTaskLimit: 60, billingEnabled: false, proPriceLabel: PRO_LABEL });
+    res.json({ freeTaskLimit: 60, billingEnabled: false, proPriceLabel: PRO_LABEL, upfrontPriceLabel: UPFRONT_LABEL });
   }
 });
 app.use('/api/auth', auth);
